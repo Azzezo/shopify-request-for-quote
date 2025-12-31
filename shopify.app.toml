@@ -1,0 +1,125 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+name = "Request for Quote"
+client_id = "YOUR_CLIENT_ID"
+application_url = "https://your-app-url.com"
+embedded = true
+
+[access_scopes]
+scopes = "read_products,write_products,read_metaobjects,write_metaobjects"
+
+[auth]
+redirect_urls = [
+  "https://your-app-url.com/auth/callback",
+  "https://your-app-url.com/auth/shopify/callback",
+  "https://your-app-url.com/api/auth/callback"
+]
+
+[webhooks]
+api_version = "2024-10"
+
+[app_proxy]
+url = "https://your-app-url.com/api/proxy"
+subpath = "rfq"
+prefix = "apps"
+
+# Product metafield definitions
+[product.metafields.app.rfq_enabled]
+name = "Enable Request for Quote"
+description = "When enabled, the Add to Cart button will be replaced with a Request for Quote button"
+type = "boolean"
+access.admin = "merchant_read_write"
+access.storefront = "public_read"
+
+[product.metafields.app.rfq_hide_price]
+name = "Hide Price"
+description = "When enabled, the product price will be hidden"
+type = "boolean"
+access.admin = "merchant_read_write"
+access.storefront = "public_read"
+
+# ============================================
+# METAOBJECT DEFINITIONS (Shopify's built-in database)
+# These store data directly in Shopify - no external DB needed!
+# ============================================
+
+# App Settings Metaobject - stores configuration per shop
+[metaobjects.app.rfq_settings]
+name = "RFQ Settings"
+access.storefront = "public_read"
+access.admin = "merchant_read_write"
+
+[metaobjects.app.rfq_settings.fields.notification_email]
+name = "Notification Email"
+type = "single_line_text_field"
+required = false
+
+[metaobjects.app.rfq_settings.fields.phone_number]
+name = "Phone Number"
+type = "single_line_text_field"
+required = false
+
+[metaobjects.app.rfq_settings.fields.form_title]
+name = "Form Title"
+type = "single_line_text_field"
+required = false
+
+[metaobjects.app.rfq_settings.fields.form_description]
+name = "Form Description"
+type = "single_line_text_field"
+required = false
+
+[metaobjects.app.rfq_settings.fields.success_message]
+name = "Success Message"
+type = "single_line_text_field"
+required = false
+
+# Quote Submission Metaobject - stores each quote request
+[metaobjects.app.rfq_submission]
+name = "Quote Submission"
+access.storefront = "none"
+access.admin = "merchant_read_write"
+
+[metaobjects.app.rfq_submission.fields.customer_name]
+name = "Customer Name"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.rfq_submission.fields.customer_email]
+name = "Customer Email"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.rfq_submission.fields.customer_phone]
+name = "Customer Phone"
+type = "single_line_text_field"
+required = false
+
+[metaobjects.app.rfq_submission.fields.product_title]
+name = "Product"
+type = "single_line_text_field"
+required = false
+
+[metaobjects.app.rfq_submission.fields.variant_title]
+name = "Variant"
+type = "single_line_text_field"
+required = false
+
+[metaobjects.app.rfq_submission.fields.request_details]
+name = "Request Details"
+type = "multi_line_text_field"
+required = true
+
+[metaobjects.app.rfq_submission.fields.status]
+name = "Status"
+type = "single_line_text_field"
+required = true
+validations.choices = ["pending", "contacted", "quoted", "completed", "cancelled"]
+
+[pos]
+embedded = false
+
+[build]
+automatically_update_urls_on_dev = true
+dev_store_url = ""
+

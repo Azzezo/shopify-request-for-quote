@@ -1,0 +1,511 @@
+{% comment %}
+  Request for Quote Button Block
+  This block replaces the Add to Cart button with a Request for Quote button
+  when the product has RFQ enabled via metafield.
+{% endcomment %}
+
+{% assign rfq_enabled = product.metafields.app.rfq_enabled.value %}
+{% assign hide_price = product.metafields.app.rfq_hide_price.value %}
+
+{% if rfq_enabled %}
+  <div class="rfq-container" data-product-id="{{ product.id }}" data-product-title="{{ product.title }}" data-variant-id="{{ product.selected_or_first_available_variant.id }}" data-variant-title="{{ product.selected_or_first_available_variant.title }}" data-shop="{{ shop.permanent_domain }}">
+    
+    {% if hide_price %}
+      <style>
+        .price, .product-price, [class*="price"], .product__price, .product-single__price {
+          display: none !important;
+        }
+      </style>
+    {% endif %}
+
+    <style>
+      /* Hide default add to cart when RFQ is enabled */
+      .product-form__submit, 
+      button[name="add"], 
+      .add-to-cart,
+      .product-form__cart-submit,
+      [data-add-to-cart],
+      form[action="/cart/add"] button[type="submit"] {
+        display: none !important;
+      }
+    </style>
+
+    <button type="button" class="rfq-button {{ block.settings.button_style }}" onclick="openRfqModal()">
+      {{ block.settings.button_text | default: "Request a Quote" }}
+    </button>
+
+    <!-- RFQ Modal -->
+    <div id="rfq-modal" class="rfq-modal" style="display: none;">
+      <div class="rfq-modal-overlay" onclick="closeRfqModal()"></div>
+      <div class="rfq-modal-content">
+        <div class="rfq-modal-header">
+          <h2 class="rfq-modal-title">Request a Quote</h2>
+          <p class="rfq-modal-subtitle">Or feel free to call us on <a href="tel:+35318118920" class="rfq-phone">+353 (0)1 8118920</a></p>
+          <button type="button" class="rfq-close-btn" onclick="closeRfqModal()" aria-label="Close">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+        
+        <form id="rfq-form" class="rfq-form">
+          <div class="rfq-field">
+            <label for="rfq-name" class="rfq-label">Name <span class="rfq-required">*</span></label>
+            <input type="text" id="rfq-name" name="customerName" required class="rfq-input" placeholder="Your name">
+          </div>
+          
+          <div class="rfq-field">
+            <label for="rfq-email" class="rfq-label">Email <span class="rfq-required">*</span></label>
+            <input type="email" id="rfq-email" name="customerEmail" required class="rfq-input" placeholder="your.email@example.com">
+          </div>
+          
+          <div class="rfq-field">
+            <label for="rfq-phone" class="rfq-label">Telephone</label>
+            <input type="tel" id="rfq-phone" name="customerPhone" class="rfq-input" placeholder="+353 1 234 5678">
+          </div>
+          
+          <div class="rfq-field">
+            <label for="rfq-details" class="rfq-label">Request Details <span class="rfq-required">*</span></label>
+            <textarea id="rfq-details" name="requestDetails" required class="rfq-textarea" rows="4" placeholder="Please describe what you're looking for..."></textarea>
+          </div>
+          
+          <div class="rfq-field">
+            <button type="submit" class="rfq-submit-btn">
+              <span class="rfq-submit-text">Submit</span>
+              <span class="rfq-submit-loading" style="display: none;">
+                <svg class="rfq-spinner" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-opacity="0.25"/>
+                  <path d="M12 2C6.47715 2 2 6.47715 2 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                Submitting...
+              </span>
+            </button>
+          </div>
+        </form>
+        
+        <div id="rfq-success" class="rfq-success" style="display: none;">
+          <div class="rfq-success-icon">
+            <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="24" cy="24" r="24" fill="#10B981"/>
+              <path d="M14 24L21 31L34 18" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <h3 class="rfq-success-title">Thank You!</h3>
+          <p class="rfq-success-message">We have received your quote request and will get back to you shortly.</p>
+          <button type="button" class="rfq-close-success-btn" onclick="closeRfqModal()">Close</button>
+        </div>
+        
+        <div id="rfq-error" class="rfq-error" style="display: none;">
+          <p class="rfq-error-message"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .rfq-container {
+      margin: 1rem 0;
+    }
+
+    .rfq-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: 1rem 2rem;
+      font-size: 1rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: #2563eb;
+      color: white;
+    }
+
+    .rfq-button:hover {
+      background: #1d4ed8;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+    }
+
+    .rfq-button.secondary {
+      background: transparent;
+      border: 2px solid #2563eb;
+      color: #2563eb;
+    }
+
+    .rfq-button.secondary:hover {
+      background: #2563eb;
+      color: white;
+    }
+
+    /* Modal Styles */
+    .rfq-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 999999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .rfq-modal-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
+    }
+
+    .rfq-modal-content {
+      position: relative;
+      background: white;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 500px;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 2rem;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      animation: rfqSlideUp 0.3s ease;
+    }
+
+    @keyframes rfqSlideUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .rfq-modal-header {
+      text-align: center;
+      margin-bottom: 1.5rem;
+      position: relative;
+    }
+
+    .rfq-modal-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #1f2937;
+      margin: 0 0 0.5rem;
+    }
+
+    .rfq-modal-subtitle {
+      font-size: 0.9rem;
+      color: #6b7280;
+      margin: 0;
+    }
+
+    .rfq-phone {
+      color: #2563eb;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .rfq-phone:hover {
+      text-decoration: underline;
+    }
+
+    .rfq-close-btn {
+      position: absolute;
+      top: -0.5rem;
+      right: -0.5rem;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f3f4f6;
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      color: #6b7280;
+      transition: all 0.2s;
+    }
+
+    .rfq-close-btn:hover {
+      background: #e5e7eb;
+      color: #1f2937;
+    }
+
+    .rfq-form {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .rfq-field {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .rfq-label {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 0.5rem;
+    }
+
+    .rfq-required {
+      color: #ef4444;
+    }
+
+    .rfq-input,
+    .rfq-textarea {
+      padding: 0.75rem 1rem;
+      font-size: 1rem;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      font-family: inherit;
+    }
+
+    .rfq-input:focus,
+    .rfq-textarea:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    .rfq-textarea {
+      resize: vertical;
+      min-height: 100px;
+    }
+
+    .rfq-submit-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      width: 100%;
+      padding: 1rem;
+      font-size: 1rem;
+      font-weight: 600;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-top: 0.5rem;
+    }
+
+    .rfq-submit-btn:hover:not(:disabled) {
+      background: #1d4ed8;
+    }
+
+    .rfq-submit-btn:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+
+    .rfq-spinner {
+      animation: rfqSpin 1s linear infinite;
+    }
+
+    @keyframes rfqSpin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* Success State */
+    .rfq-success {
+      text-align: center;
+      padding: 2rem 0;
+    }
+
+    .rfq-success-icon {
+      margin-bottom: 1rem;
+    }
+
+    .rfq-success-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #1f2937;
+      margin: 0 0 0.5rem;
+    }
+
+    .rfq-success-message {
+      color: #6b7280;
+      margin: 0 0 1.5rem;
+    }
+
+    .rfq-close-success-btn {
+      padding: 0.75rem 2rem;
+      font-size: 1rem;
+      font-weight: 600;
+      background: #f3f4f6;
+      color: #374151;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .rfq-close-success-btn:hover {
+      background: #e5e7eb;
+    }
+
+    /* Error State */
+    .rfq-error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-top: 1rem;
+    }
+
+    .rfq-error-message {
+      color: #dc2626;
+      margin: 0;
+      font-size: 0.875rem;
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .rfq-modal-content {
+        width: 95%;
+        padding: 1.5rem;
+        margin: 1rem;
+      }
+    }
+  </style>
+
+  <script>
+    (function() {
+      const container = document.querySelector('.rfq-container');
+      const productId = container.dataset.productId;
+      const productTitle = container.dataset.productTitle;
+      const variantId = container.dataset.variantId;
+      const variantTitle = container.dataset.variantTitle;
+      const shop = container.dataset.shop;
+
+      window.openRfqModal = function() {
+        document.getElementById('rfq-modal').style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        document.getElementById('rfq-form').style.display = 'block';
+        document.getElementById('rfq-success').style.display = 'none';
+        document.getElementById('rfq-error').style.display = 'none';
+      };
+
+      window.closeRfqModal = function() {
+        document.getElementById('rfq-modal').style.display = 'none';
+        document.body.style.overflow = '';
+        // Reset form
+        document.getElementById('rfq-form').reset();
+      };
+
+      // Close modal on escape key
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+          closeRfqModal();
+        }
+      });
+
+      // Handle form submission
+      document.getElementById('rfq-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const form = e.target;
+        const submitBtn = form.querySelector('.rfq-submit-btn');
+        const submitText = submitBtn.querySelector('.rfq-submit-text');
+        const submitLoading = submitBtn.querySelector('.rfq-submit-loading');
+        const errorDiv = document.getElementById('rfq-error');
+        const errorMsg = errorDiv.querySelector('.rfq-error-message');
+        
+        // Show loading state
+        submitBtn.disabled = true;
+        submitText.style.display = 'none';
+        submitLoading.style.display = 'inline-flex';
+        errorDiv.style.display = 'none';
+
+        const formData = new FormData(form);
+        formData.append('shop', shop);
+        formData.append('productId', productId);
+        formData.append('productTitle', productTitle);
+        formData.append('productVariantId', variantId);
+        formData.append('variantTitle', variantTitle);
+
+        try {
+          const response = await fetch('/apps/rfq', {
+            method: 'POST',
+            body: formData,
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            // Show success state
+            document.getElementById('rfq-form').style.display = 'none';
+            document.getElementById('rfq-success').style.display = 'block';
+            if (result.message) {
+              document.querySelector('.rfq-success-message').textContent = result.message;
+            }
+          } else {
+            // Show error
+            errorMsg.textContent = result.error || 'Something went wrong. Please try again.';
+            errorDiv.style.display = 'block';
+          }
+        } catch (error) {
+          console.error('Error submitting form:', error);
+          errorMsg.textContent = 'Network error. Please check your connection and try again.';
+          errorDiv.style.display = 'block';
+        } finally {
+          // Reset button state
+          submitBtn.disabled = false;
+          submitText.style.display = 'inline';
+          submitLoading.style.display = 'none';
+        }
+      });
+    })();
+  </script>
+{% else %}
+  {% comment %} RFQ not enabled for this product - show nothing {% endcomment %}
+{% endif %}
+
+{% schema %}
+{
+  "name": "Request for Quote",
+  "target": "section",
+  "enabled_on": {
+    "templates": ["product"]
+  },
+  "settings": [
+    {
+      "type": "text",
+      "id": "button_text",
+      "label": "Button Text",
+      "default": "Request a Quote"
+    },
+    {
+      "type": "select",
+      "id": "button_style",
+      "label": "Button Style",
+      "options": [
+        {
+          "value": "primary",
+          "label": "Primary (Filled)"
+        },
+        {
+          "value": "secondary",
+          "label": "Secondary (Outlined)"
+        }
+      ],
+      "default": "primary"
+    }
+  ]
+}
+{% endschema %}
+

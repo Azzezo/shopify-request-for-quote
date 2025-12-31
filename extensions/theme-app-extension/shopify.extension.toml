@@ -1,0 +1,18 @@
+api_version = "2024-10"
+uid = "37515f63-8398-24c9-fb47-4aea2727cabbcba17501"
+type = "theme_app_extension"
+name = "Request for Quote"
+
+[settings]
+[[settings.fields]]
+key = "button_text"
+type = "single_line_text_field"
+name = "Button Text"
+default = "Request a Quote"
+
+[[settings.fields]]
+key = "button_style"
+type = "single_line_text_field"
+name = "Button Style"
+default = "primary"
+

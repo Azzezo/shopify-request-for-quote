@@ -1,0 +1,25 @@
+{
+  "request_for_quote": {
+    "button_text": "Request a Quote",
+    "modal_title": "Request a Quote",
+    "modal_subtitle": "Or feel free to call us",
+    "form": {
+      "name": "Name",
+      "email": "Email",
+      "phone": "Telephone",
+      "details": "Request Details",
+      "submit": "Submit",
+      "submitting": "Submitting..."
+    },
+    "success": {
+      "title": "Thank You!",
+      "message": "We have received your quote request and will get back to you shortly.",
+      "close": "Close"
+    },
+    "error": {
+      "generic": "Something went wrong. Please try again.",
+      "network": "Network error. Please check your connection and try again."
+    }
+  }
+}
+
