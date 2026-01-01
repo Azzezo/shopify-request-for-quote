@@ -30,13 +30,13 @@ const GET_SETTINGS_QUERY = `
   }
 `;
 
-const GET_SUBMISSIONS_COUNT_QUERY = `
-  query GetSubmissionsCounts {
-    all: metaobjects(type: "$app:rfq_submission", first: 1) {
-      totalCount
-    }
-    pending: metaobjects(type: "$app:rfq_submission", first: 1, query: "fields.status:pending") {
-      totalCount
+// NOTE: MetaobjectConnection does NOT expose totalCount in the Admin API schema.
+// To compute counts, we page through nodes and count them server-side.
+const COUNT_METAOBJECTS_QUERY = `
+  query CountMetaobjects($type: String!, $first: Int!, $after: String, $query: String) {
+    metaobjects(type: $type, first: $first, after: $after, query: $query) {
+      nodes { id }
+      pageInfo { hasNextPage endCursor }
     }
   }
 `;
@@ -51,11 +51,41 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const settings = settingsData?.data?.metaobjects?.nodes?.[0];
   const notificationEmail = settings?.fields?.find((f: any) => f.key === "notification_email")?.value;
 
-  // Get submission counts
-  const countsResponse = await admin.graphql(GET_SUBMISSIONS_COUNT_QUERY);
-  const countsData = await countsResponse.json();
-  const submissionsCount = countsData?.data?.all?.totalCount || 0;
-  const pendingCount = countsData?.data?.pending?.totalCount || 0;
+  const countMetaobjects = async (type: string, query?: string) => {
+    let after: string | null = null;
+    let total = 0;
+    const first = 250;
+    // Safety cap to avoid runaway loops in case of unexpected pagination behavior.
+    const maxPages = 50;
+
+    for (let page = 0; page < maxPages; page++) {
+      const resp = await admin.graphql(COUNT_METAOBJECTS_QUERY, {
+        variables: {
+          type,
+          first,
+          after,
+          query: query ?? null,
+        },
+      });
+      const data = await resp.json();
+      const conn = data?.data?.metaobjects;
+      const nodes = conn?.nodes ?? [];
+      total += nodes.length;
+
+      if (!conn?.pageInfo?.hasNextPage) break;
+      after = conn.pageInfo.endCursor;
+      if (!after) break;
+    }
+
+    return total;
+  };
+
+  // Get submission counts (computed via pagination)
+  const submissionsCount = await countMetaobjects("$app:rfq_submission");
+  const pendingCount = await countMetaobjects(
+    "$app:rfq_submission",
+    "fields.status:pending"
+  );
 
   return json({
     shop,
