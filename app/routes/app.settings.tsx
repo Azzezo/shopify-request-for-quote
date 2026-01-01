@@ -1,6 +1,11 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useSubmit, useNavigation } from "@remix-run/react";
+import {
+  useActionData,
+  useLoaderData,
+  useNavigation,
+  useSubmit,
+} from "@remix-run/react";
 import {
   Page,
   Layout,
@@ -99,7 +104,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
+  if (!session?.shop) {
+    return json(
+      { success: false, error: "Missing shop in session. Please reload the app." },
+      { status: 401 }
+    );
+  }
 
   const formData = await request.formData();
   const settingsId = formData.get("settingsId") as string;
@@ -119,15 +130,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (settingsId) {
     // Update existing settings
-    await admin.graphql(UPDATE_SETTINGS_MUTATION, {
+    const resp = await admin.graphql(UPDATE_SETTINGS_MUTATION, {
       variables: {
         id: settingsId,
         metaobject: { fields },
       },
     });
+    const data = await resp.json();
+    const userErrors = data?.data?.metaobjectUpdate?.userErrors ?? [];
+    if (userErrors.length) {
+      console.error("metaobjectUpdate userErrors", { shop: session.shop, userErrors });
+      return json({ success: false, userErrors }, { status: 400 });
+    }
   } else {
     // Create new settings
-    await admin.graphql(CREATE_SETTINGS_MUTATION, {
+    const resp = await admin.graphql(CREATE_SETTINGS_MUTATION, {
       variables: {
         metaobject: {
           type: "$app:rfq_settings",
@@ -136,6 +153,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         },
       },
     });
+    const data = await resp.json();
+    const userErrors = data?.data?.metaobjectCreate?.userErrors ?? [];
+    if (userErrors.length) {
+      console.error("metaobjectCreate userErrors", { shop: session.shop, userErrors });
+      return json({ success: false, userErrors }, { status: 400 });
+    }
   }
 
   return json({ success: true });
@@ -143,10 +166,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
 export default function Settings() {
   const { settings } = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
   const submit = useSubmit();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showError, setShowError] = useState(false);
 
   const [formState, setFormState] = useState({
     notificationEmail: settings.notificationEmail,
@@ -157,11 +182,18 @@ export default function Settings() {
   });
 
   useEffect(() => {
-    if (navigation.state === "idle" && navigation.formData) {
+    if (!actionData) return;
+
+    if (actionData.success) {
       setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
+      setShowError(false);
+      const t = setTimeout(() => setShowSuccess(false), 3000);
+      return () => clearTimeout(t);
     }
-  }, [navigation.state, navigation.formData]);
+
+    setShowError(true);
+    setShowSuccess(false);
+  }, [actionData]);
 
   const handleChange = useCallback(
     (field: string) => (value: string) => {
@@ -187,6 +219,19 @@ export default function Settings() {
           <BlockStack gap="400">
             {showSuccess && (
               <Banner title="Settings saved successfully!" tone="success" onDismiss={() => setShowSuccess(false)} />
+            )}
+            {showError && (
+              <Banner
+                title="Could not save settings"
+                tone="critical"
+                onDismiss={() => setShowError(false)}
+              >
+                <p>
+                  {actionData && "error" in actionData && actionData.error
+                    ? actionData.error
+                    : "Shopify rejected the update. Check logs for details."}
+                </p>
+              </Banner>
             )}
 
             <Card>
