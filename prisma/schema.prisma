@@ -10,6 +10,9 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Note: If you see connection timeout errors, Neon's free tier
+// puts the database to sleep after inactivity. First request wakes it up.
+
 // Session storage is required for Shopify authentication
 // All other app data is stored in Shopify Metaobjects - no external DB needed!
 model Session {
