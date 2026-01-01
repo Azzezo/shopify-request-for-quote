@@ -1,16 +1,4 @@
-/*
-  Warnings:
-
-  - You are about to drop the `AppSettings` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `QuoteSubmission` table. If the table is not empty, all the data it contains will be lost.
-
-*/
--- DropTable
-PRAGMA foreign_keys=off;
-DROP TABLE "AppSettings";
-PRAGMA foreign_keys=on;
-
--- DropTable
-PRAGMA foreign_keys=off;
-DROP TABLE "QuoteSubmission";
-PRAGMA foreign_keys=on;
+-- These tables were removed when the app switched to storing app data in Shopify Metaobjects.
+-- Keep this migration as a safe no-op on Postgres (in case tables never existed).
+DROP TABLE IF EXISTS "AppSettings";
+DROP TABLE IF EXISTS "QuoteSubmission";

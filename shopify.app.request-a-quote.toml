@@ -12,10 +12,13 @@ automatically_update_urls_on_dev = true
 api_version = "2026-01"
 
 [access_scopes]
-scopes = "read_metaobjects,read_products,write_metaobjects,write_products"
+scopes = "read_metaobjects,write_metaobjects,write_metaobject_definitions,read_products,write_products"
 
 [auth]
-redirect_urls = [ "https://shopify-request-for-quote.vercel.app/auth/callback" ]
+redirect_urls = [
+  "https://shopify-request-for-quote.vercel.app/auth/callback",
+  "https://shopify-request-for-quote.vercel.app/auth/shopify/callback"
+]
 
 [app_proxy]
 url = "https://shopify-request-for-quote.vercel.app/api/proxy"
@@ -36,3 +39,81 @@ description = "When enabled, the product price will be hidden"
 type = "boolean"
 access.admin = "merchant_read_write"
 access.storefront = "public_read"
+
+# ============================================
+# METAOBJECT DEFINITIONS (Shopify's built-in database)
+# These store data directly in Shopify - no external DB needed!
+# ============================================
+
+# App Settings Metaobject - stores configuration per shop
+[metaobjects.app.rfq_settings]
+name = "RFQ Settings"
+access.storefront = "public_read"
+access.admin = "merchant_read_write"
+
+[metaobjects.app.rfq_settings.fields.notification_email]
+name = "Notification Email"
+type = "single_line_text_field"
+required = false
+
+[metaobjects.app.rfq_settings.fields.phone_number]
+name = "Phone Number"
+type = "single_line_text_field"
+required = false
+
+[metaobjects.app.rfq_settings.fields.form_title]
+name = "Form Title"
+type = "single_line_text_field"
+required = false
+
+[metaobjects.app.rfq_settings.fields.form_description]
+name = "Form Description"
+type = "single_line_text_field"
+required = false
+
+[metaobjects.app.rfq_settings.fields.success_message]
+name = "Success Message"
+type = "single_line_text_field"
+required = false
+
+# Quote Submission Metaobject - stores each quote request
+[metaobjects.app.rfq_submission]
+name = "Quote Submission"
+access.storefront = "none"
+access.admin = "merchant_read_write"
+
+[metaobjects.app.rfq_submission.fields.customer_name]
+name = "Customer Name"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.rfq_submission.fields.customer_email]
+name = "Customer Email"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.rfq_submission.fields.customer_phone]
+name = "Customer Phone"
+type = "single_line_text_field"
+required = false
+
+[metaobjects.app.rfq_submission.fields.product_title]
+name = "Product"
+type = "single_line_text_field"
+required = false
+
+[metaobjects.app.rfq_submission.fields.variant_title]
+name = "Variant"
+type = "single_line_text_field"
+required = false
+
+[metaobjects.app.rfq_submission.fields.request_details]
+name = "Request Details"
+type = "multi_line_text_field"
+required = true
+
+[metaobjects.app.rfq_submission.fields.status]
+name = "Status"
+type = "single_line_text_field"
+required = true
+validations.choices = ["pending", "contacted", "quoted", "completed", "cancelled"]
