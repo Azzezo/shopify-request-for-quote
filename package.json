@@ -2,7 +2,7 @@
   "name": "request-for-quote",
   "private": true,
   "scripts": {
-    "build": "prisma generate && prisma db push --skip-generate && remix vite:build",
+    "build": "prisma generate && remix vite:build",
     "postinstall": "prisma generate",
     "dev": "shopify app dev",
     "config:link": "shopify app config link",
