@@ -2,7 +2,7 @@
 
 client_id = "4e76630129642980167b72fff7e9ec18"
 name = "Request A Quote"
-application_url = "https://shopify.dev/apps/default-app-home"
+application_url = "https://shopify-request-for-quote.vercel.app"
 embedded = true
 
 [build]
@@ -12,8 +12,27 @@ automatically_update_urls_on_dev = true
 api_version = "2026-01"
 
 [access_scopes]
-# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 scopes = "read_metaobjects,read_products,write_metaobjects,write_products"
 
 [auth]
-redirect_urls = [ "https://shopify.dev/apps/default-app-home/api/auth" ]
+redirect_urls = [ "https://shopify-request-for-quote.vercel.app/auth/callback" ]
+
+[app_proxy]
+url = "https://shopify-request-for-quote.vercel.app/api/proxy"
+subpath = "rfq"
+prefix = "apps"
+
+# Product metafield definitions
+[product.metafields.app.rfq_enabled]
+name = "Enable Request for Quote"
+description = "When enabled, the Add to Cart button will be replaced with a Request for Quote button"
+type = "boolean"
+access.admin = "merchant_read_write"
+access.storefront = "public_read"
+
+[product.metafields.app.rfq_hide_price]
+name = "Hide Price"
+description = "When enabled, the product price will be hidden"
+type = "boolean"
+access.admin = "merchant_read_write"
+access.storefront = "public_read"
