@@ -1,6 +1,9 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Only initialize Resend if API key is provided
+const resend = process.env.RESEND_API_KEY 
+  ? new Resend(process.env.RESEND_API_KEY) 
+  : null;
 
 interface QuoteSubmission {
   id: string;
@@ -95,8 +98,8 @@ View all submissions in your Shopify admin: Apps → Request for Quote → Quote
     `;
 
     // If no RESEND_API_KEY is configured, log the email instead
-    if (!process.env.RESEND_API_KEY) {
-      console.log("=== QUOTE NOTIFICATION EMAIL ===");
+    if (!resend) {
+      console.log("=== QUOTE NOTIFICATION EMAIL (No Resend configured) ===");
       console.log("To:", to);
       console.log("Subject: New Quote Request from", submission.customerName);
       console.log(textContent);
