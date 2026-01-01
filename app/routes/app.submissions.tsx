@@ -24,7 +24,6 @@ const GET_SUBMISSIONS_QUERY = `
       nodes {
         id
         handle
-        createdAt
         updatedAt
         fields {
           key
@@ -71,7 +70,7 @@ interface Submission {
   variantTitle: string;
   requestDetails: string;
   status: string;
-  createdAt: string;
+  updatedAt: string;
 }
 
 function parseSubmissionFromMetaobject(metaobject: any): Submission {
@@ -91,7 +90,7 @@ function parseSubmissionFromMetaobject(metaobject: any): Submission {
     variantTitle: getValue("variant_title"),
     requestDetails: getValue("request_details"),
     status: getValue("status") || "pending",
-    createdAt: metaobject.createdAt,
+    updatedAt: metaobject.updatedAt,
   };
 }
 
@@ -217,6 +216,7 @@ export default function Submissions() {
   };
 
   const formatDate = (date: string) => {
+    if (!date) return "-";
     return new Date(date).toLocaleString();
   };
 
@@ -236,7 +236,7 @@ export default function Submissions() {
       <IndexTable.Cell>{submission.customerPhone || "-"}</IndexTable.Cell>
       <IndexTable.Cell>{submission.productTitle || "General Inquiry"}</IndexTable.Cell>
       <IndexTable.Cell>{getStatusBadge(submission.status)}</IndexTable.Cell>
-      <IndexTable.Cell>{formatDate(submission.createdAt)}</IndexTable.Cell>
+      <IndexTable.Cell>{formatDate(submission.updatedAt)}</IndexTable.Cell>
       <IndexTable.Cell>
         <Button size="slim" onClick={() => openModal(submission)}>
           View
@@ -387,7 +387,7 @@ export default function Submissions() {
                   Submitted
                 </Text>
                 <Text as="p" variant="bodyMd">
-                  {formatDate(selectedSubmission.createdAt)}
+                  {formatDate(selectedSubmission.updatedAt)}
                 </Text>
               </div>
             </BlockStack>
