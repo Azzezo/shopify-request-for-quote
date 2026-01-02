@@ -4,8 +4,20 @@
   when the product has RFQ enabled via metafield.
 {% endcomment %}
 
-{% assign rfq_enabled = product.metafields.app.rfq_enabled.value %}
-{% assign hide_price = product.metafields.app.rfq_hide_price.value %}
+{%- assign rfq_enabled = false -%}
+{%- assign hide_price = false -%}
+
+{%- if product and product.metafields.app.rfq_enabled != blank -%}
+  {%- assign rfq_enabled = product.metafields.app.rfq_enabled.value -%}
+{%- elsif product and product.metafields.custom.rfq_enabled != blank -%}
+  {%- assign rfq_enabled = product.metafields.custom.rfq_enabled.value -%}
+{%- endif -%}
+
+{%- if product and product.metafields.app.rfq_hide_price != blank -%}
+  {%- assign hide_price = product.metafields.app.rfq_hide_price.value -%}
+{%- elsif product and product.metafields.custom.rfq_hide_price != blank -%}
+  {%- assign hide_price = product.metafields.custom.rfq_hide_price.value -%}
+{%- endif -%}
 
 {% if rfq_enabled %}
   <div class="rfq-container" data-product-id="{{ product.id }}" data-product-title="{{ product.title }}" data-variant-id="{{ product.selected_or_first_available_variant.id }}" data-variant-title="{{ product.selected_or_first_available_variant.title }}" data-shop="{{ shop.permanent_domain }}">
@@ -472,7 +484,24 @@
     })();
   </script>
 {% else %}
-  {% comment %} RFQ not enabled for this product - show nothing {% endcomment %}
+  {%- if request.design_mode -%}
+    <div class="rfq-container" style="padding: 12px; border: 1px dashed #d1d5db; border-radius: 8px; background: #f9fafb;">
+      {%- if product -%}
+        <strong>{{ 'request_for_quote.editor.not_enabled_title' | t }}</strong>
+        <p style="margin: 6px 0 0;">
+          {{ 'request_for_quote.editor.not_enabled_body' | t }}
+        </p>
+        <p style="margin: 6px 0 0; font-size: 12px; color: #6b7280;">
+          {{ 'request_for_quote.editor.debug' | t: value: rfq_enabled }}
+        </p>
+      {%- else -%}
+        <strong>{{ 'request_for_quote.editor.no_product_title' | t }}</strong>
+        <p style="margin: 6px 0 0;">
+          {{ 'request_for_quote.editor.no_product_body' | t }}
+        </p>
+      {%- endif -%}
+    </div>
+  {%- endif -%}
 {% endif %}
 
 {% schema %}
