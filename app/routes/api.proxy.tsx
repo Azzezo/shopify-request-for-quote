@@ -2,7 +2,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { unauthenticated } from "../shopify.server";
 import { sendQuoteNotification } from "../services/email.server";
-import { RFQ_SUBMISSION_TYPE } from "../services/metaobject-setup.server";
+import { RFQ_SUBMISSION_TYPE, ensureRfqSubmissionType } from "../services/metaobject-setup.server";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -118,6 +118,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     const { admin } = await unauthenticated.admin(shop);
+
+    // Ensure the shop-owned metaobject type exists
+    await ensureRfqSubmissionType(admin);
 
     // Generate a unique handle for the submission
     const handle = `rfq-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
