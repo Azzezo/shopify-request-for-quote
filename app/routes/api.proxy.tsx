@@ -93,10 +93,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const customerName = formData.get("customerName") as string;
     const customerEmail = formData.get("customerEmail") as string;
     const customerPhone = formData.get("customerPhone") as string;
+    const customerCompany = formData.get("customerCompany") as string;
+    const quantity = formData.get("quantity") as string;
     const requestDetails = formData.get("requestDetails") as string;
+    
+    console.log("RFQ Submission received:", { shop, customerName, customerEmail, productTitle });
 
-    // Validate required fields
-    if (!shop || !customerName || !customerEmail || !requestDetails) {
+    // Validate required fields (requestDetails is optional)
+    if (!shop || !customerName || !customerEmail) {
       return json(
         { error: "Missing required fields" },
         { status: 400, headers: corsHeaders }

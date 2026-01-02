@@ -2,90 +2,205 @@
   Request for Quote Button Block
   This block replaces the Add to Cart button with a Request for Quote button
   when the product has RFQ enabled via metafield.
+  
+  PLACEMENT: For best results, add this block inside the "Main Product" section,
+  not in a separate "Apps" section. This ensures proper positioning near the buy buttons.
 {% endcomment %}
 
 {%- assign rfq_enabled = false -%}
 {%- assign hide_price = false -%}
 
-{%- if product and product.metafields.app.rfq_enabled != blank -%}
-  {%- assign rfq_enabled = product.metafields.app.rfq_enabled.value -%}
+{%- comment -%}
+  Check for app-owned metafield using $app reserved namespace prefix.
+  The $app prefix is required for theme app extensions to access their own app's metafields.
+{%- endcomment -%}
+{%- if product and product.metafields["$app"].rfq_enabled != blank -%}
+  {%- assign rfq_enabled = product.metafields["$app"].rfq_enabled.value -%}
 {%- elsif product and product.metafields.custom.rfq_enabled != blank -%}
   {%- assign rfq_enabled = product.metafields.custom.rfq_enabled.value -%}
 {%- endif -%}
 
-{%- if product and product.metafields.app.rfq_hide_price != blank -%}
-  {%- assign hide_price = product.metafields.app.rfq_hide_price.value -%}
+{%- if product and product.metafields["$app"].rfq_hide_price != blank -%}
+  {%- assign hide_price = product.metafields["$app"].rfq_hide_price.value -%}
 {%- elsif product and product.metafields.custom.rfq_hide_price != blank -%}
   {%- assign hide_price = product.metafields.custom.rfq_hide_price.value -%}
 {%- endif -%}
 
 {% if rfq_enabled %}
-  <div class="rfq-container" data-product-id="{{ product.id }}" data-product-title="{{ product.title }}" data-variant-id="{{ product.selected_or_first_available_variant.id }}" data-variant-title="{{ product.selected_or_first_available_variant.title }}" data-shop="{{ shop.permanent_domain }}" data-hide-price="{{ hide_price }}">
-    
+  {%- comment -%}
+    GLOBAL styles to hide buy-related elements across the ENTIRE page.
+    These need to be global because the block might be in a different section than the product form.
+  {%- endcomment -%}
+  <style>
+    /* Hide Add to Cart / Buy buttons */
+    .product-form__submit,
+    .product-form__cart-submit,
+    .add-to-cart,
+    .btn-addtocart,
+    .btn-add-to-cart,
+    .addtocart,
+    .add_to_cart,
+    [data-add-to-cart],
+    [data-add-to-cart-btn],
+    button[name="add"],
+    input[name="add"],
+    form[action="/cart/add"] button[type="submit"],
+    form[action="/cart/add"] input[type="submit"],
+    form[action*="/cart/add"] button[type="submit"],
+    form[action*="/cart/add"] input[type="submit"],
+    [type="submit"][name="add"],
+    .product__submit__add,
+    .product-add-to-cart,
+    .product-form__buttons > button:not(.rfq-button),
+    .product-form__buttons > .shopify-payment-button,
+    .ProductForm__AddToCart {
+      display: none !important;
+    }
+
+    /* Hide Quantity selector - including Clenli theme specific */
+    .quantity,
+    .quantity-selector,
+    .quantity__wrapper,
+    .product-form__quantity,
+    .product-quantity,
+    .product__quantity,
+    .quantity-wrapper,
+    .quantity-input,
+    .quantity__input,
+    [data-quantity-input],
+    .product-form__input--quantity,
+    .quantity-input-wrapper,
+    .product-single__quantity,
+    .quantity-selector-wrapper,
+    label[for*="quantity"],
+    .quantity__label,
+    .qty-field,
+    .qty-wrapper,
+    .qty-input,
+    .qty-btn {
+      display: none !important;
+    }
+
+    /* Hide Dynamic Checkout / PayPal / Shop Pay buttons - including Clenli theme specific */
+    .shopify-payment-button,
+    .shopify-payment-button__button,
+    .dynamic-checkout__buttons,
+    .dynamic-checkout,
+    [data-shopify="payment-button"],
+    .additional-checkout-buttons,
+    .cart__dynamic-checkout-buttons,
+    .product-form__checkout-buttons,
+    .paypal-buttons,
+    .paypal-button,
+    .paypal-checkout-btn,
+    [data-paypal],
+    .shopify-cleanslate,
+    .gpay-button,
+    .apple-pay-button,
+    #dynamic-checkout-cart,
+    .or-separator,
+    .product-form__or {
+      display: none !important;
+    }
+
     {% if hide_price %}
-      <style>
-        .price, .product-price, [class*="price"], .product__price, .product-single__price {
-          display: none !important;
-        }
-      </style>
+    /* Hide prices when configured - including Clenli theme specific */
+    .price,
+    .price-box,
+    .product-price,
+    .product__price,
+    .product-single__price,
+    .current-price,
+    .tax-note,
+    [data-price],
+    [data-product-price],
+    .money,
+    .product__price-and-badge {
+      display: none !important;
+    }
     {% endif %}
+  </style>
 
-    <style>
-      /* Hide default add to cart when RFQ is enabled */
-      .product-form__submit, 
-      button[name="add"], 
-      .add-to-cart,
-      .product-form__cart-submit,
-      [data-add-to-cart],
-      form[action="/cart/add"] button[type="submit"] {
-        display: none !important;
-      }
-    </style>
+  <div class="rfq-container" 
+       data-product-id="{{ product.id }}" 
+       data-product-title="{{ product.title | escape }}" 
+       data-variant-id="{{ product.selected_or_first_available_variant.id }}" 
+       data-variant-title="{{ product.selected_or_first_available_variant.title | escape }}" 
+       data-shop="{{ shop.permanent_domain }}" 
+       data-hide-price="{{ hide_price }}">
 
-    <button type="button" class="rfq-button {{ block.settings.button_style }}" onclick="openRfqModal()">
-      {{ block.settings.button_text | default: "Request a Quote" }}
-    </button>
+    <div class="rfq-button-row">
+      <button type="button" 
+              class="rfq-button rfq-open-btn" 
+              data-modal-id="rfq-modal-{{ block.id }}"
+              style="--rfq-btn-bg: {{ block.settings.button_color | default: '#6fb31a' }}; --rfq-btn-text: {{ block.settings.button_text_color | default: '#ffffff' }};">
+        {{ block.settings.button_text | default: "Request a Quote" }}
+      </button>
+      {% if block.settings.response_time_text != blank %}
+        <span class="rfq-response-time">{{ block.settings.response_time_text }}</span>
+      {% endif %}
+    </div>
 
     <!-- RFQ Modal -->
-    <div id="rfq-modal" class="rfq-modal" style="display: none;">
-      <div class="rfq-modal-overlay" onclick="closeRfqModal()"></div>
+    <div id="rfq-modal-{{ block.id }}" class="rfq-modal" style="display: none;">
+      <div class="rfq-modal-overlay"></div>
       <div class="rfq-modal-content">
         <div class="rfq-modal-header">
-          <h2 class="rfq-modal-title">Request a Quote</h2>
-          <p class="rfq-modal-subtitle">Or feel free to call us on <a href="tel:+35318118920" class="rfq-phone">+353 (0)1 8118920</a></p>
-          <button type="button" class="rfq-close-btn" onclick="closeRfqModal()" aria-label="Close">
+          <h2 class="rfq-modal-title">{{ block.settings.modal_title | default: "Request a Quote" }}</h2>
+          {% if block.settings.phone_number != blank %}
+            <p class="rfq-modal-subtitle">Or feel free to call us on <a href="tel:{{ block.settings.phone_number | remove: ' ' | remove: '(' | remove: ')' }}" class="rfq-phone">{{ block.settings.phone_number }}</a></p>
+          {% endif %}
+          <button type="button" class="rfq-close-btn" aria-label="Close">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
         </div>
         
-        <form id="rfq-form" class="rfq-form">
+        <form class="rfq-form" action="javascript:void(0);" onsubmit="return false;">
           <div class="rfq-field">
-            <label for="rfq-name" class="rfq-label">Name <span class="rfq-required">*</span></label>
-            <input type="text" id="rfq-name" name="customerName" required class="rfq-input" placeholder="Your name">
+            <label class="rfq-label">Name <span class="rfq-required">*</span></label>
+            <input type="text" name="customerName" required class="rfq-input" placeholder="Your name" value="{{ customer.name | escape }}">
           </div>
           
           <div class="rfq-field">
-            <label for="rfq-email" class="rfq-label">Email <span class="rfq-required">*</span></label>
-            <input type="email" id="rfq-email" name="customerEmail" required class="rfq-input" placeholder="your.email@example.com">
+            <label class="rfq-label">Email <span class="rfq-required">*</span></label>
+            <input type="email" name="customerEmail" required class="rfq-input" placeholder="your.email@example.com" value="{{ customer.email | escape }}">
           </div>
           
+          {% if block.settings.show_phone_field %}
           <div class="rfq-field">
-            <label for="rfq-phone" class="rfq-label">Telephone</label>
-            <input type="tel" id="rfq-phone" name="customerPhone" class="rfq-input" placeholder="+353 1 234 5678">
+            <label class="rfq-label">Telephone {% if block.settings.phone_required %}<span class="rfq-required">*</span>{% endif %}</label>
+            <input type="tel" name="customerPhone" class="rfq-input" placeholder="+353 1 234 5678" {% if block.settings.phone_required %}required{% endif %} value="{{ customer.default_address.phone | escape }}">
           </div>
+          {% endif %}
           
+          {% if block.settings.show_company_field %}
           <div class="rfq-field">
-            <label for="rfq-details" class="rfq-label">Request Details <span class="rfq-required">*</span></label>
-            <textarea id="rfq-details" name="requestDetails" required class="rfq-textarea" rows="4" placeholder="Please describe what you're looking for..."></textarea>
+            <label class="rfq-label">Company {% if block.settings.company_required %}<span class="rfq-required">*</span>{% endif %}</label>
+            <input type="text" name="customerCompany" class="rfq-input" placeholder="Your company name" {% if block.settings.company_required %}required{% endif %} value="{{ customer.default_address.company | escape }}">
           </div>
+          {% endif %}
           
+          {% if block.settings.show_quantity_field %}
           <div class="rfq-field">
-            <button type="submit" class="rfq-submit-btn">
-              <span class="rfq-submit-text">Submit</span>
+            <label class="rfq-label">Quantity {% if block.settings.quantity_required %}<span class="rfq-required">*</span>{% endif %}</label>
+            <input type="number" name="quantity" class="rfq-input" placeholder="Enter quantity needed" min="1" {% if block.settings.quantity_required %}required{% endif %}>
+          </div>
+          {% endif %}
+          
+          {% if block.settings.show_details_field %}
+          <div class="rfq-field">
+            <label class="rfq-label">{{ block.settings.details_label | default: "Request Details" }} <span class="rfq-required">*</span></label>
+            <textarea name="requestDetails" required class="rfq-textarea" rows="3" placeholder="{{ block.settings.details_placeholder | default: 'Please describe what you are looking for...' }}"></textarea>
+          </div>
+          {% endif %}
+          
+          <div class="rfq-field rfq-submit-wrapper" style="display: block !important; visibility: visible !important; margin-top: 24px !important; padding-top: 24px !important; border-top: 1px solid #e5e7eb !important;">
+            <button type="button" class="rfq-submit-btn" style="display: flex !important; visibility: visible !important; width: 100% !important; min-height: 56px !important; padding: 18px 24px !important; font-size: 17px !important; font-weight: 700 !important; background-color: #6fb31a !important; color: #ffffff !important; border: none !important; border-radius: 30px !important; cursor: pointer !important; align-items: center !important; justify-content: center !important; gap: 10px !important;">
+              <span class="rfq-submit-text">{{ block.settings.submit_button_text | default: "Submit Request" }}</span>
               <span class="rfq-submit-loading" style="display: none;">
-                <svg class="rfq-spinner" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <svg class="rfq-spinner" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-opacity="0.25"/>
                   <path d="M12 2C6.47715 2 2 6.47715 2 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                 </svg>
@@ -95,19 +210,28 @@
           </div>
         </form>
         
-        <div id="rfq-success" class="rfq-success" style="display: none;">
+        <div class="rfq-success" style="display: none;">
           <div class="rfq-success-icon">
             <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="24" cy="24" r="24" fill="#10B981"/>
+              <circle cx="24" cy="24" r="24" fill="#6fb31a"/>
               <path d="M14 24L21 31L34 18" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </div>
           <h3 class="rfq-success-title">Thank You!</h3>
-          <p class="rfq-success-message">We have received your quote request and will get back to you shortly.</p>
-          <button type="button" class="rfq-close-success-btn" onclick="closeRfqModal()">Close</button>
+          <p class="rfq-success-message">{{ block.settings.success_message | default: "We have received your quote request and will get back to you shortly." }}</p>
+          {% if block.settings.response_time_text != blank %}
+            <p class="rfq-response-notice">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6fb31a" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12,6 12,12 16,14"></polyline>
+              </svg>
+              {{ block.settings.response_time_text }}
+            </p>
+          {% endif %}
+          <button type="button" class="rfq-close-success-btn">Close</button>
         </div>
         
-        <div id="rfq-error" class="rfq-error" style="display: none;">
+        <div class="rfq-error" style="display: none;">
           <p class="rfq-error-message"></p>
         </div>
       </div>
@@ -117,41 +241,59 @@
   <style>
     .rfq-container {
       margin: 1rem 0;
+      width: 100%;
     }
 
+    /* Button row with response time */
+    .rfq-button-row {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+
+    .rfq-response-time {
+      font-size: 14px;
+      color: #666;
+      font-style: italic;
+    }
+
+    /* Button styles - inherit from theme where possible */
     .rfq-button {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 100%;
-      padding: 1rem 2rem;
-      font-size: 1rem;
+      gap: 10px;
+      min-height: 48px;
+      padding: 0 35px;
+      font-size: 15px;
       font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      border: none;
-      border-radius: 4px;
+      font-family: inherit;
       cursor: pointer;
       transition: all 0.2s ease;
-      background: #2563eb;
-      color: white;
+      /* Use CSS variables set inline, with fallbacks */
+      background: var(--rfq-btn-bg, #6fb31a) !important;
+      color: var(--rfq-btn-text, #ffffff) !important;
+      border: none !important;
+      border-radius: 30px;
     }
 
     .rfq-button:hover {
-      background: #1d4ed8;
+      opacity: 0.9;
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
     }
 
-    .rfq-button.secondary {
+    .rfq-button.button--secondary,
+    .rfq-button.btn--secondary {
       background: transparent;
-      border: 2px solid #2563eb;
-      color: #2563eb;
+      border: 2px solid var(--rfq-btn-bg, var(--color-button, var(--color-primary, #2563eb)));
+      color: var(--rfq-btn-bg, var(--color-button, var(--color-primary, #2563eb)));
     }
 
-    .rfq-button.secondary:hover {
-      background: #2563eb;
-      color: white;
+    .rfq-button.button--secondary:hover,
+    .rfq-button.btn--secondary:hover {
+      background: var(--rfq-btn-bg, var(--color-button, var(--color-primary, #2563eb)));
+      color: var(--rfq-btn-text, var(--color-button-text, #ffffff));
     }
 
     /* Modal Styles */
@@ -182,12 +324,20 @@
       background: white;
       border-radius: 12px;
       width: 90%;
-      max-width: 500px;
+      max-width: 520px;
       max-height: 90vh;
       overflow-y: auto;
-      padding: 2rem;
+      overflow-x: hidden;
+      padding: 0;
+      margin: 20px;
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
       animation: rfqSlideUp 0.3s ease;
+      font-family: inherit;
+    }
+    
+    /* Ensure form elements inside modal are visible */
+    .rfq-modal-content * {
+      box-sizing: border-box;
     }
 
     @keyframes rfqSlideUp {
@@ -203,39 +353,42 @@
 
     .rfq-modal-header {
       text-align: center;
-      margin-bottom: 1.5rem;
+      padding: 28px 36px 24px;
       position: relative;
+      border-bottom: 1px solid #e5e7eb;
     }
 
     .rfq-modal-title {
-      font-size: 1.5rem;
+      font-size: 22px;
       font-weight: 700;
       color: #1f2937;
-      margin: 0 0 0.5rem;
+      margin: 0 0 6px;
+      font-family: inherit;
     }
 
     .rfq-modal-subtitle {
-      font-size: 0.9rem;
+      font-size: 14px;
       color: #6b7280;
       margin: 0;
     }
 
     .rfq-phone {
-      color: #2563eb;
+      color: #6fb31a;
       text-decoration: none;
       font-weight: 600;
     }
 
     .rfq-phone:hover {
       text-decoration: underline;
+      color: #5a9315;
     }
 
     .rfq-close-btn {
       position: absolute;
-      top: -0.5rem;
-      right: -0.5rem;
-      width: 36px;
-      height: 36px;
+      top: 0.75rem;
+      right: 0.75rem;
+      width: 32px;
+      height: 32px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -245,6 +398,7 @@
       cursor: pointer;
       color: #6b7280;
       transition: all 0.2s;
+      padding: 0;
     }
 
     .rfq-close-btn:hover {
@@ -253,9 +407,11 @@
     }
 
     .rfq-form {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
+      display: flex !important;
+      flex-direction: column !important;
+      padding: 28px 36px 36px !important;
+      gap: 18px !important;
+      overflow: visible !important;
     }
 
     .rfq-field {
@@ -264,10 +420,11 @@
     }
 
     .rfq-label {
-      font-size: 0.875rem;
+      font-size: 14px;
       font-weight: 600;
       color: #374151;
-      margin-bottom: 0.5rem;
+      margin-bottom: 8px;
+      font-family: inherit;
     }
 
     .rfq-required {
@@ -276,46 +433,68 @@
 
     .rfq-input,
     .rfq-textarea {
-      padding: 0.75rem 1rem;
-      font-size: 1rem;
-      border: 2px solid #e5e7eb;
+      padding: 12px 14px;
+      font-size: 15px;
+      border: 1px solid #d1d5db;
       border-radius: 8px;
       transition: border-color 0.2s, box-shadow 0.2s;
       font-family: inherit;
+      background: #fff;
+      color: #1f2937;
+      width: 100%;
+      box-sizing: border-box;
     }
 
     .rfq-input:focus,
     .rfq-textarea:focus {
       outline: none;
-      border-color: #2563eb;
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+      border-color: #6fb31a;
+      box-shadow: 0 0 0 3px rgba(111, 179, 26, 0.15);
     }
 
     .rfq-textarea {
       resize: vertical;
-      min-height: 100px;
+      min-height: 80px;
+    }
+
+    .rfq-submit-wrapper {
+      display: block !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      margin-top: 24px !important;
+      padding-top: 24px !important;
+      border-top: 1px solid #e5e7eb !important;
     }
 
     .rfq-submit-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem;
-      width: 100%;
-      padding: 1rem;
-      font-size: 1rem;
-      font-weight: 600;
-      background: #2563eb;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: background 0.2s;
-      margin-top: 0.5rem;
+      display: flex !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 10px;
+      width: 100% !important;
+      padding: 18px 24px !important;
+      font-size: 17px !important;
+      font-weight: 700 !important;
+      font-family: inherit;
+      background-color: #6fb31a !important;
+      color: #ffffff !important;
+      border: none !important;
+      border-radius: 30px !important;
+      cursor: pointer !important;
+      transition: all 0.2s;
+      min-height: 56px !important;
+      max-height: none !important;
+      height: auto !important;
+      box-shadow: 0 4px 12px rgba(111, 179, 26, 0.35) !important;
+      position: relative !important;
+      z-index: 10 !important;
     }
 
     .rfq-submit-btn:hover:not(:disabled) {
-      background: #1d4ed8;
+      background-color: #5a9315;
+      box-shadow: 0 4px 12px rgba(111, 179, 26, 0.4);
     }
 
     .rfq-submit-btn:disabled {
@@ -354,20 +533,35 @@
       margin: 0 0 1.5rem;
     }
 
+    .rfq-response-notice {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(111, 179, 26, 0.1);
+      color: #5a9315;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      margin-bottom: 1.5rem;
+    }
+
     .rfq-close-success-btn {
       padding: 0.75rem 2rem;
       font-size: 1rem;
       font-weight: 600;
-      background: #f3f4f6;
-      color: #374151;
-      border: none;
-      border-radius: 8px;
+      background: #6fb31a !important;
+      color: #ffffff !important;
+      border: none !important;
+      border-radius: 30px;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: all 0.2s;
+      font-family: inherit;
     }
 
     .rfq-close-success-btn:hover {
-      background: #e5e7eb;
+      background: #5a9315 !important;
+      transform: translateY(-1px);
     }
 
     /* Error State */
@@ -389,15 +583,36 @@
     @media (max-width: 640px) {
       .rfq-modal-content {
         width: 95%;
-        padding: 1.5rem;
-        margin: 1rem;
+        max-height: 95vh;
+        margin: 10px;
+      }
+      
+      .rfq-modal-header {
+        padding: 20px 20px 16px;
+      }
+      
+      .rfq-form {
+        padding: 24px 20px 28px;
+        gap: 16px;
+      }
+      
+      .rfq-modal-title {
+        font-size: 20px;
+      }
+      
+      .rfq-submit-btn {
+        padding: 16px 20px;
+        font-size: 16px;
+        min-height: 52px;
       }
     }
   </style>
 
   <script>
     (function() {
-      const container = document.querySelector('.rfq-container');
+      // Find the specific container for this block
+      const containers = document.querySelectorAll('.rfq-container');
+      const container = containers[containers.length - 1]; // Get the most recently added one
       if (!container) return;
 
       const productId = container.dataset.productId;
@@ -405,101 +620,121 @@
       const variantId = container.dataset.variantId;
       const variantTitle = container.dataset.variantTitle;
       const shop = container.dataset.shop;
-      const hidePrice = container.dataset.hidePrice === 'true' || container.dataset.hidePrice === '1';
+      const hidePrice = container.dataset.hidePrice === 'true';
 
-      const scope =
-        container.closest('[data-section-id]') ||
-        container.closest('.shopify-section') ||
-        container.closest('section') ||
-        container.closest('main') ||
-        document;
+      // Find elements within this container
+      const openBtn = container.querySelector('.rfq-open-btn');
+      const modalId = openBtn ? openBtn.dataset.modalId : null;
+      const modal = modalId ? document.getElementById(modalId) : container.querySelector('.rfq-modal');
+      
+      if (!modal) {
+        console.warn('RFQ: Modal not found');
+        return;
+      }
 
+      const overlay = modal.querySelector('.rfq-modal-overlay');
+      const closeBtn = modal.querySelector('.rfq-close-btn');
+      const form = modal.querySelector('.rfq-form');
+      const successDiv = modal.querySelector('.rfq-success');
+      const errorDiv = modal.querySelector('.rfq-error');
+
+      // Hide default UI elements (but NOT anything inside our modal)
       function hideDefaultUi() {
         try {
-          const addToCartSelectors = [
-            '.product-form__submit',
-            '.product-form__cart-submit',
-            '.add-to-cart',
-            '[data-add-to-cart]',
-            'button[name="add"]',
-            'form[action^="/cart/add"] button[type="submit"]',
-            'form[action*="/cart/add"] button[type="submit"]',
-            'form[action^="/cart/add"] input[type="submit"]',
-            'form[action*="/cart/add"] input[type="submit"]',
-            '[type="submit"][name="add"]',
+          const hideSelectors = [
+            '.product-form__submit', '.btn-add-to-cart', '.btn-addtocart', '.addtocart',
+            'button[name="add"]', '[data-add-to-cart]', '.product-add-to-cart',
+            '.qty-field', '.quantity-selector',
+            '.shopify-payment-button', '.paypal-checkout-btn', '.dynamic-checkout__buttons',
+            '.additional-checkout-buttons', '.or-separator'
           ];
-
-          scope.querySelectorAll(addToCartSelectors.join(',')).forEach((el) => {
-            el.style.setProperty('display', 'none', 'important');
-          });
-
-          if (hidePrice) {
-            const priceSelectors = [
-              '.price',
-              '.product-price',
-              '.product__price',
-              '.product-single__price',
-              '[class*="price"]',
-              '[data-price]',
-              '[data-product-price]',
-            ];
-            scope.querySelectorAll(priceSelectors.join(',')).forEach((el) => {
+          document.querySelectorAll(hideSelectors.join(',')).forEach((el) => {
+            // Don't hide anything inside our RFQ modal
+            if (!el.closest('.rfq-modal') && !el.closest('.rfq-modal-content')) {
               el.style.setProperty('display', 'none', 'important');
+            }
+          });
+          
+          if (hidePrice) {
+            const priceSelectors = ['.price', '.price-box', '.product-price', '.current-price', '[data-price]'];
+            document.querySelectorAll(priceSelectors.join(',')).forEach((el) => {
+              if (!el.closest('.rfq-container') && !el.closest('.rfq-modal')) {
+                el.style.setProperty('display', 'none', 'important');
+              }
             });
           }
-        } catch (e) {
-          // no-op
-        }
+        } catch (e) {}
       }
 
       hideDefaultUi();
+      setTimeout(hideDefaultUi, 500);
+      setTimeout(hideDefaultUi, 1500);
 
-      // Some themes re-render buy buttons/prices when variants change. Keep hiding on mutations.
-      try {
-        const observer = new MutationObserver(() => hideDefaultUi());
-        observer.observe(scope, { childList: true, subtree: true });
-      } catch (e) {
-        // no-op
+      // Open modal
+      function openModal() {
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        if (form) form.style.display = 'flex';
+        if (successDiv) successDiv.style.display = 'none';
+        if (errorDiv) errorDiv.style.display = 'none';
       }
 
-      window.openRfqModal = function() {
-        document.getElementById('rfq-modal').style.display = 'flex';
-        document.body.style.overflow = 'hidden';
-        document.getElementById('rfq-form').style.display = 'block';
-        document.getElementById('rfq-success').style.display = 'none';
-        document.getElementById('rfq-error').style.display = 'none';
-      };
-
-      window.closeRfqModal = function() {
-        document.getElementById('rfq-modal').style.display = 'none';
+      // Close modal
+      function closeModal() {
+        modal.style.display = 'none';
         document.body.style.overflow = '';
-        // Reset form
-        document.getElementById('rfq-form').reset();
-      };
+        if (form) form.reset();
+      }
 
-      // Close modal on escape key
+      // Event listeners
+      if (openBtn) openBtn.addEventListener('click', openModal);
+      if (overlay) overlay.addEventListener('click', closeModal);
+      if (closeBtn) closeBtn.addEventListener('click', closeModal);
+      
+      // Success close button
+      const successCloseBtn = modal.querySelector('.rfq-close-success-btn');
+      if (successCloseBtn) successCloseBtn.addEventListener('click', closeModal);
+
       document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-          closeRfqModal();
+        if (e.key === 'Escape' && modal.style.display === 'flex') {
+          closeModal();
         }
       });
 
-      // Handle form submission
-      document.getElementById('rfq-form').addEventListener('submit', async function(e) {
-        e.preventDefault();
+      // Form submission handler
+      async function handleFormSubmit(e) {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
         
-        const form = e.target;
+        if (!form) return false;
+        
+        // Basic validation
+        const nameInput = form.querySelector('input[name="customerName"]');
+        const emailInput = form.querySelector('input[name="customerEmail"]');
+        
+        if (nameInput && !nameInput.value.trim()) {
+          alert('Please enter your name');
+          nameInput.focus();
+          return false;
+        }
+        
+        if (emailInput && !emailInput.value.trim()) {
+          alert('Please enter your email');
+          emailInput.focus();
+          return false;
+        }
+        
         const submitBtn = form.querySelector('.rfq-submit-btn');
-        const submitText = submitBtn.querySelector('.rfq-submit-text');
-        const submitLoading = submitBtn.querySelector('.rfq-submit-loading');
-        const errorDiv = document.getElementById('rfq-error');
-        const errorMsg = errorDiv.querySelector('.rfq-error-message');
+        const submitText = submitBtn ? submitBtn.querySelector('.rfq-submit-text') : null;
+        const submitLoading = submitBtn ? submitBtn.querySelector('.rfq-submit-loading') : null;
+        const errorMsg = errorDiv ? errorDiv.querySelector('.rfq-error-message') : null;
         
-        // Show loading state
-        submitBtn.disabled = true;
-        submitText.style.display = 'none';
-        submitLoading.style.display = 'inline-flex';
-        errorDiv.style.display = 'none';
+        if (submitBtn) submitBtn.disabled = true;
+        if (submitText) submitText.style.display = 'none';
+        if (submitLoading) submitLoading.style.display = 'inline-flex';
+        if (errorDiv) errorDiv.style.display = 'none';
 
         const formData = new FormData(form);
         formData.append('shop', shop);
@@ -507,6 +742,18 @@
         formData.append('productTitle', productTitle);
         formData.append('productVariantId', variantId);
         formData.append('variantTitle', variantTitle);
+        
+        // If requestDetails is empty, add a default message
+        if (!formData.get('requestDetails') || formData.get('requestDetails') === '') {
+          const companyVal = formData.get('customerCompany') || '';
+          const quantityVal = formData.get('quantity') || '';
+          let details = 'Quote request for ' + productTitle;
+          if (quantityVal) details += ' - Quantity: ' + quantityVal;
+          if (companyVal) details += ' - Company: ' + companyVal;
+          formData.set('requestDetails', details);
+        }
+
+        console.log('RFQ: Submitting form to /apps/rfq');
 
         try {
           const response = await fetch('/apps/rfq', {
@@ -514,60 +761,65 @@
             body: formData,
           });
 
+          console.log('RFQ: Response status:', response.status);
+          
           const result = await response.json();
+          console.log('RFQ: Response data:', result);
 
           if (result.success) {
-            // Show success state
-            document.getElementById('rfq-form').style.display = 'none';
-            document.getElementById('rfq-success').style.display = 'block';
-            if (result.message) {
-              document.querySelector('.rfq-success-message').textContent = result.message;
-            }
+            console.log('RFQ: Submission successful!');
+            form.style.display = 'none';
+            if (successDiv) successDiv.style.display = 'block';
           } else {
-            // Show error
-            errorMsg.textContent = result.error || 'Something went wrong. Please try again.';
-            errorDiv.style.display = 'block';
+            console.error('RFQ: Server error:', result.error);
+            if (errorMsg) errorMsg.textContent = result.error || 'Something went wrong. Please try again.';
+            if (errorDiv) errorDiv.style.display = 'block';
           }
         } catch (error) {
-          console.error('Error submitting form:', error);
-          errorMsg.textContent = 'Network error. Please check your connection and try again.';
-          errorDiv.style.display = 'block';
+          console.error('RFQ: Network error:', error);
+          if (errorMsg) errorMsg.textContent = 'Network error. Please try again.';
+          if (errorDiv) errorDiv.style.display = 'block';
         } finally {
-          // Reset button state
-          submitBtn.disabled = false;
-          submitText.style.display = 'inline';
-          submitLoading.style.display = 'none';
+          if (submitBtn) submitBtn.disabled = false;
+          if (submitText) submitText.style.display = 'inline';
+          if (submitLoading) submitLoading.style.display = 'none';
         }
-      });
+        
+        return false;
+      }
+
+      // Attach to form submit
+      if (form) {
+        form.addEventListener('submit', handleFormSubmit);
+        
+        // Also attach click handler to submit button as fallback
+        const submitBtn = form.querySelector('.rfq-submit-btn');
+        if (submitBtn) {
+          submitBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            handleFormSubmit(e);
+          });
+        }
+      }
     })();
   </script>
 {% else %}
   {%- if request.design_mode -%}
     <div class="rfq-container" style="padding: 12px; border: 1px dashed #d1d5db; border-radius: 8px; background: #f9fafb;">
       {%- if product -%}
-        <strong>{{ 'request_for_quote.editor.not_enabled_title' | t }}</strong>
-        <p style="margin: 6px 0 0;">
-          {{ 'request_for_quote.editor.not_enabled_body' | t }}
+        <strong>RFQ not enabled for this product</strong>
+        <p style="margin: 6px 0 0; font-size: 13px;">
+          To show the Request a Quote button, enable it in the product's metafields:
+          <br>Products → [Product] → Metafields → "Enable Request for Quote" = true
         </p>
         <p style="margin: 6px 0 0; font-size: 12px; color: #6b7280;">
-          {{ 'request_for_quote.editor.debug' | t: value: rfq_enabled }}
+          Debug: rfq_enabled = {{ rfq_enabled }}
         </p>
-        <p style="margin: 6px 0 0; font-size: 12px; color: #6b7280;">
-          {{ 'request_for_quote.editor.debug_app' | t: value: product.metafields.app.rfq_enabled.value }}
-        </p>
-        <p style="margin: 6px 0 0; font-size: 12px; color: #6b7280;">
-          {{ 'request_for_quote.editor.debug_custom' | t: value: product.metafields.custom.rfq_enabled.value }}
-        </p>
-        <details style="margin: 8px 0 0;">
-          <summary style="cursor: pointer; font-size: 12px; color: #2563eb;">
-            {{ 'request_for_quote.editor.debug_metafields_summary' | t }}
-          </summary>
-          <pre style="margin: 8px 0 0; padding: 8px; background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 11px; white-space: pre-wrap; word-break: break-word;">{{ product.metafields | json | truncate: 2000 }}</pre>
-        </details>
       {%- else -%}
-        <strong>{{ 'request_for_quote.editor.no_product_title' | t }}</strong>
-        <p style="margin: 6px 0 0;">
-          {{ 'request_for_quote.editor.no_product_body' | t }}
+        <strong>No product context</strong>
+        <p style="margin: 6px 0 0; font-size: 13px;">
+          This block must be placed on a product page to work.
         </p>
       {%- endif -%}
     </div>
@@ -583,10 +835,21 @@
   },
   "settings": [
     {
+      "type": "header",
+      "content": "Button Settings"
+    },
+    {
       "type": "text",
       "id": "button_text",
       "label": "Button Text",
       "default": "Request a Quote"
+    },
+    {
+      "type": "text",
+      "id": "response_time_text",
+      "label": "Response Time Text",
+      "default": "Response within an hour",
+      "info": "Text shown beside the button. Leave empty to hide."
     },
     {
       "type": "select",
@@ -603,8 +866,112 @@
         }
       ],
       "default": "primary"
+    },
+    {
+      "type": "color",
+      "id": "button_color",
+      "label": "Button Color",
+      "default": "#6fb31a",
+      "info": "Default is theme green"
+    },
+    {
+      "type": "color",
+      "id": "button_text_color",
+      "label": "Button Text Color",
+      "default": "#ffffff",
+      "info": "Default is white"
+    },
+    {
+      "type": "header",
+      "content": "Modal Settings"
+    },
+    {
+      "type": "text",
+      "id": "modal_title",
+      "label": "Modal Title",
+      "default": "Request a Quote"
+    },
+    {
+      "type": "text",
+      "id": "phone_number",
+      "label": "Phone Number",
+      "default": "+353 (0)1 8118920",
+      "info": "Shown in modal header. Leave empty to hide."
+    },
+    {
+      "type": "header",
+      "content": "Form Fields"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_phone_field",
+      "label": "Show Phone Field",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "phone_required",
+      "label": "Phone Required",
+      "default": false
+    },
+    {
+      "type": "checkbox",
+      "id": "show_company_field",
+      "label": "Show Company Field",
+      "default": false
+    },
+    {
+      "type": "checkbox",
+      "id": "company_required",
+      "label": "Company Required",
+      "default": false
+    },
+    {
+      "type": "checkbox",
+      "id": "show_quantity_field",
+      "label": "Show Quantity Field",
+      "default": false
+    },
+    {
+      "type": "checkbox",
+      "id": "quantity_required",
+      "label": "Quantity Required",
+      "default": false
+    },
+    {
+      "type": "checkbox",
+      "id": "show_details_field",
+      "label": "Show Details/Message Field",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "details_label",
+      "label": "Details Field Label",
+      "default": "Request Details"
+    },
+    {
+      "type": "text",
+      "id": "details_placeholder",
+      "label": "Details Field Placeholder",
+      "default": "Please describe what you're looking for..."
+    },
+    {
+      "type": "text",
+      "id": "submit_button_text",
+      "label": "Submit Button Text",
+      "default": "Submit Request"
+    },
+    {
+      "type": "header",
+      "content": "Success Message"
+    },
+    {
+      "type": "text",
+      "id": "success_message",
+      "label": "Success Message",
+      "default": "We have received your quote request and will get back to you shortly."
     }
   ]
 }
 {% endschema %}
-
