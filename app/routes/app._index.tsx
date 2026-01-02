@@ -15,6 +15,7 @@ import {
   Box,
 } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
+import { ensureRfqSubmissionType, RFQ_SUBMISSION_TYPE } from "../services/metaobject-setup.server";
 
 const GET_SETTINGS_QUERY = `
   query GetRfqSettings {
@@ -44,6 +45,9 @@ const COUNT_METAOBJECTS_QUERY = `
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const shop = session.shop;
+
+  // Ensure the shop-owned metaobject type exists (runs once, then cached)
+  await ensureRfqSubmissionType(admin);
 
   // Get app settings
   const settingsResponse = await admin.graphql(GET_SETTINGS_QUERY);
@@ -80,10 +84,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return total;
   };
 
-  // Get submission counts (computed via pagination)
-  const submissionsCount = await countMetaobjects("$app:rfq_submission");
+  // Get submission counts (computed via pagination) - uses SHOP-OWNED type
+  const submissionsCount = await countMetaobjects(RFQ_SUBMISSION_TYPE);
   const pendingCount = await countMetaobjects(
-    "$app:rfq_submission",
+    RFQ_SUBMISSION_TYPE,
     "fields.status:pending"
   );
 

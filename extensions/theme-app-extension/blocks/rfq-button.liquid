@@ -157,7 +157,7 @@
           </button>
         </div>
         
-        <form class="rfq-form" action="javascript:void(0);" onsubmit="return false;">
+        <div id="rfq-form-{{ block.id }}" class="rfq-form">
           <div class="rfq-field">
             <label class="rfq-label">Name <span class="rfq-required">*</span></label>
             <input type="text" name="customerName" required class="rfq-input" placeholder="Your name" value="{{ customer.name | escape }}">
@@ -197,7 +197,7 @@
           {% endif %}
           
           <div class="rfq-field rfq-submit-wrapper" style="display: block !important; visibility: visible !important; margin-top: 24px !important; padding-top: 24px !important; border-top: 1px solid #e5e7eb !important;">
-            <button type="button" class="rfq-submit-btn" style="display: flex !important; visibility: visible !important; width: 100% !important; min-height: 56px !important; padding: 18px 24px !important; font-size: 17px !important; font-weight: 700 !important; background-color: #6fb31a !important; color: #ffffff !important; border: none !important; border-radius: 30px !important; cursor: pointer !important; align-items: center !important; justify-content: center !important; gap: 10px !important;">
+            <button type="button" class="rfq-submit-btn" onclick="window.submitRfqForm_{{ block.id | replace: '-', '' }}(event)" style="display: flex !important; visibility: visible !important; width: 100% !important; min-height: 56px !important; padding: 18px 24px !important; font-size: 17px !important; font-weight: 700 !important; background-color: #6fb31a !important; color: #ffffff !important; border: none !important; border-radius: 30px !important; cursor: pointer !important; align-items: center !important; justify-content: center !important; gap: 10px !important;">
               <span class="rfq-submit-text">{{ block.settings.submit_button_text | default: "Submit Request" }}</span>
               <span class="rfq-submit-loading" style="display: none;">
                 <svg class="rfq-spinner" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -208,9 +208,9 @@
               </span>
             </button>
           </div>
-        </form>
+        </div>
         
-        <div class="rfq-success" style="display: none;">
+        <div id="rfq-success-{{ block.id }}" class="rfq-success" style="display: none;">
           <div class="rfq-success-icon">
             <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
               <circle cx="24" cy="24" r="24" fill="#6fb31a"/>
@@ -231,7 +231,7 @@
           <button type="button" class="rfq-close-success-btn">Close</button>
         </div>
         
-        <div class="rfq-error" style="display: none;">
+        <div id="rfq-error-{{ block.id }}" class="rfq-error" style="display: none;">
           <p class="rfq-error-message"></p>
         </div>
       </div>
@@ -610,10 +610,17 @@
 
   <script>
     (function() {
+      console.log('RFQ: Script initializing...');
+      
       // Find the specific container for this block
       const containers = document.querySelectorAll('.rfq-container');
       const container = containers[containers.length - 1]; // Get the most recently added one
-      if (!container) return;
+      if (!container) {
+        console.error('RFQ: No container found!');
+        return;
+      }
+      
+      console.log('RFQ: Container found', container);
 
       const productId = container.dataset.productId;
       const productTitle = container.dataset.productTitle;
@@ -621,22 +628,47 @@
       const variantTitle = container.dataset.variantTitle;
       const shop = container.dataset.shop;
       const hidePrice = container.dataset.hidePrice === 'true';
+      
+      console.log('RFQ: Product data:', { productId, productTitle, shop });
 
-      // Find elements within this container
+      // Find elements - search within modal for the form
+      const blockId = '{{ block.id }}';
       const openBtn = container.querySelector('.rfq-open-btn');
-      const modalId = openBtn ? openBtn.dataset.modalId : null;
-      const modal = modalId ? document.getElementById(modalId) : container.querySelector('.rfq-modal');
+      const modal = document.getElementById('rfq-modal-' + blockId);
+      
+      console.log('RFQ: Looking for elements with blockId:', blockId);
+      console.log('RFQ: Modal found:', !!modal);
       
       if (!modal) {
         console.warn('RFQ: Modal not found');
         return;
       }
-
-      const overlay = modal.querySelector('.rfq-modal-overlay');
-      const closeBtn = modal.querySelector('.rfq-close-btn');
+      
+      // Search within the modal for form and other elements
       const form = modal.querySelector('.rfq-form');
       const successDiv = modal.querySelector('.rfq-success');
       const errorDiv = modal.querySelector('.rfq-error');
+      const overlay = modal.querySelector('.rfq-modal-overlay');
+      const closeBtn = modal.querySelector('.rfq-close-btn');
+      
+      console.log('RFQ: Form found:', !!form);
+      console.log('RFQ: Success div found:', !!successDiv);
+      
+      if (!form) {
+        console.error('RFQ: Form not found inside modal!');
+        console.log('RFQ: Looking for form with query: .rfq-form');
+        console.log('RFQ: All forms in document:', document.querySelectorAll('form').length);
+        console.log('RFQ: All forms with rfq-form class:', document.querySelectorAll('.rfq-form').length);
+        console.log('RFQ: Modal children:', modal.children);
+        
+        // Try finding inside modal-content
+        const modalContent = modal.querySelector('.rfq-modal-content');
+        if (modalContent) {
+          console.log('RFQ: Modal content children:', modalContent.children);
+          const formInContent = modalContent.querySelector('.rfq-form');
+          console.log('RFQ: Form inside modal-content:', formInContent);
+        }
+      }
 
       // Hide default UI elements (but NOT anything inside our modal)
       function hideDefaultUi() {
@@ -701,19 +733,34 @@
         }
       });
 
-      // Form submission handler
+      // Form submission handler (using div instead of form to avoid nested form issues)
       async function handleFormSubmit(e) {
+        console.log('RFQ: handleFormSubmit called!');
+        
         if (e) {
           e.preventDefault();
           e.stopPropagation();
         }
         
-        if (!form) return false;
+        // Find form container (it's a div, not a form, to avoid nested form issues)
+        const formContainer = form || modal.querySelector('.rfq-form');
+        
+        if (!formContainer) {
+          console.error('RFQ: Form container not found!');
+          return false;
+        }
+        
+        console.log('RFQ: Form container found, starting submission...');
+        
+        // Get input values manually
+        const nameInput = formContainer.querySelector('input[name="customerName"]');
+        const emailInput = formContainer.querySelector('input[name="customerEmail"]');
+        const phoneInput = formContainer.querySelector('input[name="customerPhone"]');
+        const companyInput = formContainer.querySelector('input[name="customerCompany"]');
+        const quantityInput = formContainer.querySelector('input[name="quantity"]');
+        const detailsInput = formContainer.querySelector('textarea[name="requestDetails"]');
         
         // Basic validation
-        const nameInput = form.querySelector('input[name="customerName"]');
-        const emailInput = form.querySelector('input[name="customerEmail"]');
-        
         if (nameInput && !nameInput.value.trim()) {
           alert('Please enter your name');
           nameInput.focus();
@@ -726,7 +773,7 @@
           return false;
         }
         
-        const submitBtn = form.querySelector('.rfq-submit-btn');
+        const submitBtn = formContainer.querySelector('.rfq-submit-btn');
         const submitText = submitBtn ? submitBtn.querySelector('.rfq-submit-text') : null;
         const submitLoading = submitBtn ? submitBtn.querySelector('.rfq-submit-loading') : null;
         const errorMsg = errorDiv ? errorDiv.querySelector('.rfq-error-message') : null;
@@ -736,24 +783,28 @@
         if (submitLoading) submitLoading.style.display = 'inline-flex';
         if (errorDiv) errorDiv.style.display = 'none';
 
-        const formData = new FormData(form);
+        // Build form data manually
+        const formData = new FormData();
         formData.append('shop', shop);
         formData.append('productId', productId);
         formData.append('productTitle', productTitle);
         formData.append('productVariantId', variantId);
         formData.append('variantTitle', variantTitle);
+        formData.append('customerName', nameInput ? nameInput.value : '');
+        formData.append('customerEmail', emailInput ? emailInput.value : '');
+        formData.append('customerPhone', phoneInput ? phoneInput.value : '');
+        formData.append('customerCompany', companyInput ? companyInput.value : '');
         
-        // If requestDetails is empty, add a default message
-        if (!formData.get('requestDetails') || formData.get('requestDetails') === '') {
-          const companyVal = formData.get('customerCompany') || '';
-          const quantityVal = formData.get('quantity') || '';
-          let details = 'Quote request for ' + productTitle;
-          if (quantityVal) details += ' - Quantity: ' + quantityVal;
-          if (companyVal) details += ' - Company: ' + companyVal;
-          formData.set('requestDetails', details);
+        // Build request details
+        let details = detailsInput ? detailsInput.value : '';
+        if (!details) {
+          details = 'Quote request for ' + productTitle;
+          if (quantityInput && quantityInput.value) details += ' - Quantity: ' + quantityInput.value;
+          if (companyInput && companyInput.value) details += ' - Company: ' + companyInput.value;
         }
+        formData.append('requestDetails', details);
 
-        console.log('RFQ: Submitting form to /apps/rfq');
+        console.log('RFQ: Submitting to /apps/rfq');
 
         try {
           const response = await fetch('/apps/rfq', {
@@ -768,7 +819,7 @@
 
           if (result.success) {
             console.log('RFQ: Submission successful!');
-            form.style.display = 'none';
+            formContainer.style.display = 'none';
             if (successDiv) successDiv.style.display = 'block';
           } else {
             console.error('RFQ: Server error:', result.error);
@@ -788,19 +839,38 @@
         return false;
       }
 
+      // Make submit function globally available for onclick
+      window.submitRfqForm_{{ block.id | replace: '-', '' }} = function(e) {
+        console.log('RFQ: Submit button clicked!');
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        handleFormSubmit(e);
+      };
+      
+      console.log('RFQ: Global submit function registered');
+      
       // Attach to form submit
       if (form) {
         form.addEventListener('submit', handleFormSubmit);
+        console.log('RFQ: Form submit listener attached');
         
         // Also attach click handler to submit button as fallback
         const submitBtn = form.querySelector('.rfq-submit-btn');
         if (submitBtn) {
+          console.log('RFQ: Submit button found, attaching click handler');
           submitBtn.addEventListener('click', function(e) {
+            console.log('RFQ: Submit button click event fired');
             e.preventDefault();
             e.stopPropagation();
             handleFormSubmit(e);
           });
+        } else {
+          console.error('RFQ: Submit button NOT found!');
         }
+      } else {
+        console.error('RFQ: Form NOT found!');
       }
     })();
   </script>

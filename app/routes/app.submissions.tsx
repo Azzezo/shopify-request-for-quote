@@ -17,10 +17,11 @@ import {
 } from "@shopify/polaris";
 import { useState, useCallback } from "react";
 import { authenticate } from "../shopify.server";
+import { RFQ_SUBMISSION_TYPE } from "../services/metaobject-setup.server";
 
 const GET_SUBMISSIONS_QUERY = `
-  query GetRfqSubmissions($query: String) {
-    metaobjects(type: "$app:rfq_submission", first: 100, query: $query, sortKey: "updated_at", reverse: true) {
+  query GetRfqSubmissions($type: String!, $query: String) {
+    metaobjects(type: $type, first: 100, query: $query, sortKey: "updated_at", reverse: true) {
       nodes {
         id
         handle
@@ -107,7 +108,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const response = await admin.graphql(GET_SUBMISSIONS_QUERY, {
-    variables: { query },
+    variables: { type: RFQ_SUBMISSION_TYPE, query },
   });
   const data = await response.json();
 

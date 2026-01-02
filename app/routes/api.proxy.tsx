@@ -2,6 +2,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { unauthenticated } from "../shopify.server";
 import { sendQuoteNotification } from "../services/email.server";
+import { RFQ_SUBMISSION_TYPE } from "../services/metaobject-setup.server";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -121,11 +122,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // Generate a unique handle for the submission
     const handle = `rfq-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
-    // Create the submission metaobject
+    // Create the submission metaobject (SHOP-OWNED - persists after uninstall!)
     const createResponse = await admin.graphql(CREATE_SUBMISSION_MUTATION, {
       variables: {
         metaobject: {
-          type: "$app:rfq_submission",
+          type: RFQ_SUBMISSION_TYPE,
           handle,
           fields: [
             { key: "customer_name", value: customerName },
