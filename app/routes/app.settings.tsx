@@ -19,7 +19,7 @@ import {
 } from "@shopify/polaris";
 import { useState, useCallback, useEffect } from "react";
 import { authenticate } from "../shopify.server";
-import { RFQ_SETTINGS_TYPE } from "../services/metaobject-setup.server";
+import { RFQ_SETTINGS_TYPE, ensureRfqSettingsType } from "../services/metaobject-setup.server";
 
 // GraphQL queries for metaobjects (shop-owned - persists after uninstall)
 const GET_SETTINGS_QUERY = `
@@ -146,6 +146,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return json({ success: false, userErrors }, { status: 400 });
     }
   } else {
+    // Ensure the shop-owned metaobject definition exists before creating
+    await ensureRfqSettingsType(admin);
+    
     // Create new settings (shop-owned - persists after uninstall)
     const resp = await admin.graphql(CREATE_SETTINGS_MUTATION, {
       variables: {
