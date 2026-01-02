@@ -19,11 +19,12 @@ import {
 } from "@shopify/polaris";
 import { useState, useCallback, useEffect } from "react";
 import { authenticate } from "../shopify.server";
+import { RFQ_SETTINGS_TYPE } from "../services/metaobject-setup.server";
 
-// GraphQL queries for metaobjects
+// GraphQL queries for metaobjects (shop-owned - persists after uninstall)
 const GET_SETTINGS_QUERY = `
-  query GetRfqSettings {
-    metaobjects(type: "$app:rfq_settings", first: 1) {
+  query GetRfqSettings($type: String!) {
+    metaobjects(type: $type, first: 1) {
       nodes {
         id
         handle
@@ -94,7 +95,9 @@ function parseSettingsFromMetaobject(metaobject: any): Settings {
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
 
-  const response = await admin.graphql(GET_SETTINGS_QUERY);
+  const response = await admin.graphql(GET_SETTINGS_QUERY, {
+    variables: { type: RFQ_SETTINGS_TYPE }
+  });
   const data = await response.json();
   
   const metaobject = data?.data?.metaobjects?.nodes?.[0];
@@ -143,11 +146,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return json({ success: false, userErrors }, { status: 400 });
     }
   } else {
-    // Create new settings
+    // Create new settings (shop-owned - persists after uninstall)
     const resp = await admin.graphql(CREATE_SETTINGS_MUTATION, {
       variables: {
         metaobject: {
-          type: "$app:rfq_settings",
+          type: RFQ_SETTINGS_TYPE,
           handle: "default-settings",
           fields,
         },

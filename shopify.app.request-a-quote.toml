@@ -41,79 +41,17 @@ access.admin = "merchant_read_write"
 access.storefront = "public_read"
 
 # ============================================
-# METAOBJECT DEFINITIONS (Shopify's built-in database)
-# These store data directly in Shopify - no external DB needed!
+# SHOP-OWNED METAOBJECTS
 # ============================================
-
-# App Settings Metaobject - stores configuration per shop
-[metaobjects.app.rfq_settings]
-name = "RFQ Settings"
-access.storefront = "public_read"
-access.admin = "merchant_read_write"
-
-[metaobjects.app.rfq_settings.fields.notification_email]
-name = "Notification Email"
-type = "single_line_text_field"
-required = false
-
-[metaobjects.app.rfq_settings.fields.phone_number]
-name = "Phone Number"
-type = "single_line_text_field"
-required = false
-
-[metaobjects.app.rfq_settings.fields.form_title]
-name = "Form Title"
-type = "single_line_text_field"
-required = false
-
-[metaobjects.app.rfq_settings.fields.form_description]
-name = "Form Description"
-type = "single_line_text_field"
-required = false
-
-[metaobjects.app.rfq_settings.fields.success_message]
-name = "Success Message"
-type = "single_line_text_field"
-required = false
-
-# Quote Submission Metaobject - stores each quote request
-[metaobjects.app.rfq_submission]
-name = "Quote Submission"
-access.storefront = "none"
-access.admin = "merchant_read_write"
-
-[metaobjects.app.rfq_submission.fields.customer_name]
-name = "Customer Name"
-type = "single_line_text_field"
-required = true
-
-[metaobjects.app.rfq_submission.fields.customer_email]
-name = "Customer Email"
-type = "single_line_text_field"
-required = true
-
-[metaobjects.app.rfq_submission.fields.customer_phone]
-name = "Customer Phone"
-type = "single_line_text_field"
-required = false
-
-[metaobjects.app.rfq_submission.fields.product_title]
-name = "Product"
-type = "single_line_text_field"
-required = false
-
-[metaobjects.app.rfq_submission.fields.variant_title]
-name = "Variant"
-type = "single_line_text_field"
-required = false
-
-[metaobjects.app.rfq_submission.fields.request_details]
-name = "Request Details"
-type = "multi_line_text_field"
-required = false
-
-[metaobjects.app.rfq_submission.fields.status]
-name = "Status"
-type = "single_line_text_field"
-required = true
-validations.choices = ["pending", "contacted", "quoted", "completed", "cancelled"]
+# NOTE: Shop-owned metaobjects are created PROGRAMMATICALLY
+# in app/services/metaobject-setup.server.ts
+# 
+# This ensures data persists even if the app is uninstalled!
+# The app creates these types on first load:
+#   - rfq_settings: Stores app configuration
+#   - rfq_submission: Stores quote requests from customers
+#
+# We removed the [metaobjects.app.*] sections because:
+#   - app.* prefix creates APP-OWNED metaobjects (deleted on uninstall)
+#   - Shop-owned metaobjects must be created via GraphQL API
+# ============================================

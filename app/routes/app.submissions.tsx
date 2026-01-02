@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useSubmit, useNavigation } from "@remix-run/react";
+import { useLoaderData, useSubmit, useNavigation, useSearchParams } from "@remix-run/react";
 import {
   Page,
   Layout,
@@ -18,9 +18,11 @@ import {
 import { useState, useCallback } from "react";
 import { authenticate } from "../shopify.server";
 
+import { RFQ_SUBMISSION_TYPE } from "../services/metaobject-setup.server";
+
 const GET_SUBMISSIONS_QUERY = `
-  query GetRfqSubmissions($query: String) {
-    metaobjects(type: "$app:rfq_submission", first: 100, query: $query, sortKey: "updated_at", reverse: true) {
+  query GetRfqSubmissions($type: String!, $query: String) {
+    metaobjects(type: $type, first: 100, query: $query, sortKey: "updated_at", reverse: true) {
       nodes {
         id
         handle
@@ -107,7 +109,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const response = await admin.graphql(GET_SUBMISSIONS_QUERY, {
-    variables: { query },
+    variables: { type: RFQ_SUBMISSION_TYPE, query },
   });
   const data = await response.json();
 
@@ -148,6 +150,7 @@ export default function Submissions() {
   const { submissions, currentStatus } = useLoaderData<typeof loader>();
   const submit = useSubmit();
   const navigation = useNavigation();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
   const [modalActive, setModalActive] = useState(false);
@@ -268,7 +271,11 @@ export default function Submissions() {
                 options={statusOptions}
                 value={currentStatus}
                 onChange={(value) => {
-                  window.location.href = `/app/submissions?status=${value}`;
+                  if (value === "all") {
+                    setSearchParams({});
+                  } else {
+                    setSearchParams({ status: value });
+                  }
                 }}
               />
             </div>

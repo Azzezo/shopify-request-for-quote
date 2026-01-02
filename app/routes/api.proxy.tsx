@@ -2,6 +2,12 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { unauthenticated } from "../shopify.server";
 import { sendQuoteNotification } from "../services/email.server";
+import { 
+  RFQ_SUBMISSION_TYPE, 
+  RFQ_SETTINGS_TYPE,
+  ensureRfqSubmissionType,
+  ensureRfqSettingsType 
+} from "../services/metaobject-setup.server";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,8 +16,8 @@ const corsHeaders = {
 };
 
 const GET_SETTINGS_QUERY = `
-  query GetRfqSettings {
-    metaobjects(type: "$app:rfq_settings", first: 1) {
+  query GetRfqSettings($type: String!) {
+    metaobjects(type: $type, first: 1) {
       nodes {
         id
         fields {
@@ -50,7 +56,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
     const { admin } = await unauthenticated.admin(shop);
     
-    const response = await admin.graphql(GET_SETTINGS_QUERY);
+    // Ensure the shop-owned settings definition exists
+    await ensureRfqSettingsType(admin);
+    
+    const response = await admin.graphql(GET_SETTINGS_QUERY, {
+      variables: { type: RFQ_SETTINGS_TYPE }
+    });
     const data = await response.json();
     
     const settings = data?.data?.metaobjects?.nodes?.[0];
@@ -118,14 +129,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     const { admin } = await unauthenticated.admin(shop);
 
+    // Ensure the shop-owned metaobject definition exists before creating entries
+    // This is idempotent - it only creates if not already present
+    await ensureRfqSubmissionType(admin);
+
     // Generate a unique handle for the submission
     const handle = `rfq-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
-    // Create the submission metaobject (app-owned)
+    // Create the submission metaobject (shop-owned - persists after uninstall)
     const createResponse = await admin.graphql(CREATE_SUBMISSION_MUTATION, {
       variables: {
         metaobject: {
-          type: "$app:rfq_submission",
+          type: RFQ_SUBMISSION_TYPE,
           handle,
           fields: [
             { key: "customer_name", value: customerName },
@@ -133,7 +148,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             { key: "customer_phone", value: customerPhone || "" },
             { key: "product_title", value: productTitle || "" },
             { key: "variant_title", value: variantTitle || "" },
-            { key: "request_details", value: requestDetails },
+            { key: "request_details", value: requestDetails || "" },
             { key: "status", value: "pending" },
           ],
         },
@@ -151,7 +166,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     // Get settings for notification email
-    const settingsResponse = await admin.graphql(GET_SETTINGS_QUERY);
+    const settingsResponse = await admin.graphql(GET_SETTINGS_QUERY, {
+      variables: { type: RFQ_SETTINGS_TYPE }
+    });
     const settingsData = await settingsResponse.json();
     const settings = settingsData?.data?.metaobjects?.nodes?.[0];
     const fields = settings?.fields || [];
