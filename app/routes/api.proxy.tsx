@@ -19,10 +19,10 @@ const corsHeaders = {
   "X-Frame-Options": "DENY",
 };
 
-// Simple in-memory rate limiter (per email, 5 submissions per hour)
+// Simple in-memory rate limiter (per email, 50 submissions per hour)
 // In production with multiple instances, consider using Redis
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
-const RATE_LIMIT_MAX = 5;
+const RATE_LIMIT_MAX = 50;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
 function checkRateLimit(email: string): boolean {
@@ -168,7 +168,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       );
     }
 
-    // Rate limiting to prevent spam (5 submissions per email per hour)
+    // Rate limiting to prevent spam (50 submissions per email per hour)
     cleanupRateLimitMap();
     if (!checkRateLimit(customerEmail.toLowerCase())) {
       console.warn("RFQ: Rate limit exceeded for", customerEmail);
