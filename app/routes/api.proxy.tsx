@@ -9,11 +9,52 @@ import {
   ensureRfqSettingsType 
 } from "../services/metaobject-setup.server";
 
+// CORS headers - App Proxy requests come from Shopify's domain
+// The proxy itself validates the shop has the app installed
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
 };
+
+// Simple in-memory rate limiter (per email, 5 submissions per hour)
+// In production with multiple instances, consider using Redis
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_MAX = 5;
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+
+function checkRateLimit(email: string): boolean {
+  const now = Date.now();
+  const record = rateLimitMap.get(email);
+  
+  if (!record || now > record.resetTime) {
+    rateLimitMap.set(email, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+  
+  if (record.count >= RATE_LIMIT_MAX) {
+    return false;
+  }
+  
+  record.count++;
+  return true;
+}
+
+// Clean up old entries periodically (every 100 requests)
+let cleanupCounter = 0;
+function cleanupRateLimitMap() {
+  cleanupCounter++;
+  if (cleanupCounter % 100 === 0) {
+    const now = Date.now();
+    for (const [key, value] of rateLimitMap.entries()) {
+      if (now > value.resetTime) {
+        rateLimitMap.delete(key);
+      }
+    }
+  }
+}
 
 const GET_SETTINGS_QUERY = `
   query GetRfqSettings($type: String!) {
@@ -124,6 +165,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return json(
         { error: "Invalid email format" },
         { status: 400, headers: corsHeaders }
+      );
+    }
+
+    // Rate limiting to prevent spam (5 submissions per email per hour)
+    cleanupRateLimitMap();
+    if (!checkRateLimit(customerEmail.toLowerCase())) {
+      console.warn("RFQ: Rate limit exceeded for", customerEmail);
+      return json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429, headers: corsHeaders }
       );
     }
 

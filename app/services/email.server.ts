@@ -5,6 +5,17 @@ const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY) 
   : null;
 
+// Sanitize user input for HTML context to prevent XSS/HTML injection
+function escapeHtml(text: string | null | undefined): string {
+  if (!text) return "";
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 interface QuoteSubmission {
   id: string;
   shop: string;
@@ -27,9 +38,17 @@ export async function sendQuoteNotification({
   submission,
 }: SendQuoteNotificationParams): Promise<boolean> {
   try {
-    const productInfo = submission.productTitle
-      ? `<p><strong>Product:</strong> ${submission.productTitle}${
-          submission.variantTitle ? ` - ${submission.variantTitle}` : ""
+    // Sanitize all user-provided fields to prevent HTML injection
+    const safeName = escapeHtml(submission.customerName);
+    const safeEmail = escapeHtml(submission.customerEmail);
+    const safePhone = escapeHtml(submission.customerPhone);
+    const safeProduct = escapeHtml(submission.productTitle);
+    const safeVariant = escapeHtml(submission.variantTitle);
+    const safeDetails = escapeHtml(submission.requestDetails);
+
+    const productInfo = safeProduct
+      ? `<p><strong>Product:</strong> ${safeProduct}${
+          safeVariant ? ` - ${safeVariant}` : ""
         }</p>`
       : "<p><strong>Product:</strong> General Inquiry</p>";
 
@@ -55,18 +74,18 @@ export async function sendQuoteNotification({
             </div>
             <div class="content">
               <div class="field">
-                <strong>👤 Customer Name:</strong> ${submission.customerName}
+                <strong>👤 Customer Name:</strong> ${safeName}
               </div>
               <div class="field">
-                <strong>📧 Email:</strong> <a href="mailto:${submission.customerEmail}">${submission.customerEmail}</a>
+                <strong>📧 Email:</strong> <a href="mailto:${safeEmail}">${safeEmail}</a>
               </div>
               <div class="field">
-                <strong>📞 Phone:</strong> ${submission.customerPhone || "Not provided"}
+                <strong>📞 Phone:</strong> ${safePhone || "Not provided"}
               </div>
               ${productInfo}
               <div class="details">
                 <strong>📝 Request Details:</strong>
-                <p style="margin: 10px 0 0 0;">${submission.requestDetails.replace(/\n/g, "<br>")}</p>
+                <p style="margin: 10px 0 0 0;">${safeDetails.replace(/\n/g, "<br>")}</p>
               </div>
             </div>
             <div class="footer">
