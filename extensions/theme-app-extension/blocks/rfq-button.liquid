@@ -851,27 +851,9 @@
       
       console.log('RFQ: Global submit function registered');
       
-      // Attach to form submit
-      if (form) {
-        form.addEventListener('submit', handleFormSubmit);
-        console.log('RFQ: Form submit listener attached');
-        
-        // Also attach click handler to submit button as fallback
-        const submitBtn = form.querySelector('.rfq-submit-btn');
-        if (submitBtn) {
-          console.log('RFQ: Submit button found, attaching click handler');
-          submitBtn.addEventListener('click', function(e) {
-            console.log('RFQ: Submit button click event fired');
-            e.preventDefault();
-            e.stopPropagation();
-            handleFormSubmit(e);
-          });
-        } else {
-          console.error('RFQ: Submit button NOT found!');
-        }
-      } else {
-        console.error('RFQ: Form NOT found!');
-      }
+      // Note: Submit button uses onclick attribute to call window.submitRfqForm_...
+      // We don't add additional event listeners to avoid duplicate submissions
+      console.log('RFQ: Form setup complete, using onclick attribute for submission');
     })();
   </script>
 {% else %}
