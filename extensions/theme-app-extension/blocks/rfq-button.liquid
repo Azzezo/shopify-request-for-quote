@@ -211,24 +211,22 @@
         </div>
         
         <div id="rfq-success-{{ block.id }}" class="rfq-success" style="display: none;">
-          <div class="rfq-success-icon">
-            <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="24" cy="24" r="24" fill="#6fb31a"/>
-              <path d="M14 24L21 31L34 18" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          <div class="rfq-success-box">
+            <svg class="rfq-success-check" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M5 13L9 17L19 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-          </div>
-          <h3 class="rfq-success-title">Thank You!</h3>
-          <p class="rfq-success-message">{{ block.settings.success_message | default: "We have received your quote request and will get back to you shortly." }}</p>
-          {% if block.settings.response_time_text != blank %}
-            <p class="rfq-response-notice">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6fb31a" stroke-width="2">
-                <circle cx="12" cy="12" r="10"></circle>
-                <polyline points="12,6 12,12 16,14"></polyline>
+            <div class="rfq-success-text">
+              <strong>Thank you!</strong> {{ block.settings.success_message | default: "We have received your quote request and will get back to you shortly." }}
+              {% if block.settings.response_time_text != blank %}
+                <span class="rfq-response-time-inline">{{ block.settings.response_time_text }}</span>
+              {% endif %}
+            </div>
+            <button type="button" class="rfq-success-close" aria-label="Close">
+              <svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
-              {{ block.settings.response_time_text }}
-            </p>
-          {% endif %}
-          <button type="button" class="rfq-close-success-btn">Close</button>
+            </button>
+          </div>
         </div>
         
         <div id="rfq-error-{{ block.id }}" class="rfq-error" style="display: none;">
@@ -511,57 +509,67 @@
       to { transform: rotate(360deg); }
     }
 
-    /* Success State */
+    /* Success State - Compact green box */
     .rfq-success {
-      text-align: center;
-      padding: 2rem 0;
+      padding: 24px 36px 36px;
     }
 
-    .rfq-success-icon {
-      margin-bottom: 1rem;
+    .rfq-success-box {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+      border: 1px solid #6fb31a;
+      border-radius: 12px;
+      padding: 16px 20px;
+      position: relative;
     }
 
-    .rfq-success-title {
-      font-size: 1.5rem;
-      font-weight: 700;
-      color: #1f2937;
-      margin: 0 0 0.5rem;
+    .rfq-success-check {
+      flex-shrink: 0;
+      color: #6fb31a;
+      margin-top: 2px;
     }
 
-    .rfq-success-message {
-      color: #6b7280;
-      margin: 0 0 1.5rem;
+    .rfq-success-text {
+      flex: 1;
+      font-size: 15px;
+      line-height: 1.5;
+      color: #166534;
     }
 
-    .rfq-response-notice {
-      display: inline-flex;
+    .rfq-success-text strong {
+      color: #14532d;
+    }
+
+    .rfq-response-time-inline {
+      display: block;
+      margin-top: 6px;
+      font-size: 13px;
+      color: #15803d;
+      font-style: italic;
+    }
+
+    .rfq-success-close {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      display: flex;
       align-items: center;
-      gap: 8px;
-      background: rgba(111, 179, 26, 0.1);
-      color: #5a9315;
-      padding: 10px 16px;
-      border-radius: 8px;
-      font-size: 0.9rem;
-      font-weight: 500;
-      margin-bottom: 1.5rem;
-    }
-
-    .rfq-close-success-btn {
-      padding: 0.75rem 2rem;
-      font-size: 1rem;
-      font-weight: 600;
-      background: #6fb31a !important;
-      color: #ffffff !important;
-      border: none !important;
-      border-radius: 30px;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      border-radius: 50%;
       cursor: pointer;
+      color: #166534;
       transition: all 0.2s;
-      font-family: inherit;
+      padding: 0;
+      margin: -4px -8px -4px 0;
     }
 
-    .rfq-close-success-btn:hover {
-      background: #5a9315 !important;
-      transform: translateY(-1px);
+    .rfq-success-close:hover {
+      background: rgba(22, 101, 52, 0.1);
+      color: #14532d;
     }
 
     /* Error State */
@@ -723,8 +731,8 @@
       if (overlay) overlay.addEventListener('click', closeModal);
       if (closeBtn) closeBtn.addEventListener('click', closeModal);
       
-      // Success close button
-      const successCloseBtn = modal.querySelector('.rfq-close-success-btn');
+      // Success close button (in the green success box)
+      const successCloseBtn = modal.querySelector('.rfq-success-close');
       if (successCloseBtn) successCloseBtn.addEventListener('click', closeModal);
 
       document.addEventListener('keydown', function(e) {
