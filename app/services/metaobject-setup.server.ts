@@ -23,6 +23,7 @@ const CREATE_METAOBJECT_DEFINITION = `
       userErrors {
         field
         message
+        code
       }
     }
   }
@@ -40,14 +41,18 @@ const GET_METAOBJECT_DEFINITION = `
 
 /**
  * Ensures the shop-owned rfq_submission metaobject type exists.
+ * Throws an error if creation fails.
  */
 export async function ensureRfqSubmissionType(admin: any): Promise<boolean> {
   try {
     // Check if the definition already exists
+    console.log('RFQ: Checking if submission type exists...');
     const checkResponse = await admin.graphql(GET_METAOBJECT_DEFINITION, {
       variables: { type: RFQ_SUBMISSION_TYPE }
     });
     const checkData = await checkResponse.json();
+    
+    console.log('RFQ: Check response:', JSON.stringify(checkData, null, 2));
     
     if (checkData?.data?.metaobjectDefinitionByType?.id) {
       console.log('RFQ: Shop-owned submission type already exists');
@@ -63,7 +68,7 @@ export async function ensureRfqSubmissionType(admin: any): Promise<boolean> {
           name: "Quote Submission",
           access: {
             storefront: "NONE",
-            admin: "MERCHANT_READ_WRITE"  // Merchant owns the data
+            admin: "MERCHANT_READ_WRITE"
           },
           fieldDefinitions: [
             {
@@ -120,30 +125,41 @@ export async function ensureRfqSubmissionType(admin: any): Promise<boolean> {
     });
 
     const createData = await createResponse.json();
+    console.log('RFQ: Create submission definition response:', JSON.stringify(createData, null, 2));
     
     if (createData?.data?.metaobjectDefinitionCreate?.userErrors?.length > 0) {
-      console.error('RFQ: Error creating submission definition:', createData.data.metaobjectDefinitionCreate.userErrors);
-      return false;
+      const errors = createData.data.metaobjectDefinitionCreate.userErrors;
+      console.error('RFQ: Error creating submission definition:', errors);
+      throw new Error(`Failed to create submission definition: ${JSON.stringify(errors)}`);
+    }
+
+    if (createData?.errors) {
+      console.error('RFQ: GraphQL errors:', createData.errors);
+      throw new Error(`GraphQL error creating submission definition: ${JSON.stringify(createData.errors)}`);
     }
 
     console.log('RFQ: Shop-owned submission type created successfully!');
     return true;
   } catch (error) {
     console.error('RFQ: Error setting up submission metaobject definition:', error);
-    return false;
+    throw error;
   }
 }
 
 /**
  * Ensures the shop-owned rfq_settings metaobject type exists.
+ * Throws an error if creation fails.
  */
 export async function ensureRfqSettingsType(admin: any): Promise<boolean> {
   try {
     // Check if the definition already exists
+    console.log('RFQ: Checking if settings type exists...');
     const checkResponse = await admin.graphql(GET_METAOBJECT_DEFINITION, {
       variables: { type: RFQ_SETTINGS_TYPE }
     });
     const checkData = await checkResponse.json();
+    
+    console.log('RFQ: Check settings response:', JSON.stringify(checkData, null, 2));
     
     if (checkData?.data?.metaobjectDefinitionByType?.id) {
       console.log('RFQ: Shop-owned settings type already exists');
@@ -158,7 +174,7 @@ export async function ensureRfqSettingsType(admin: any): Promise<boolean> {
           type: RFQ_SETTINGS_TYPE,
           name: "RFQ Settings",
           access: {
-            storefront: "PUBLIC_READ",  // Storefront needs to read settings
+            storefront: "PUBLIC_READ",
             admin: "MERCHANT_READ_WRITE"
           },
           fieldDefinitions: [
@@ -198,17 +214,24 @@ export async function ensureRfqSettingsType(admin: any): Promise<boolean> {
     });
 
     const createData = await createResponse.json();
+    console.log('RFQ: Create settings definition response:', JSON.stringify(createData, null, 2));
     
     if (createData?.data?.metaobjectDefinitionCreate?.userErrors?.length > 0) {
-      console.error('RFQ: Error creating settings definition:', createData.data.metaobjectDefinitionCreate.userErrors);
-      return false;
+      const errors = createData.data.metaobjectDefinitionCreate.userErrors;
+      console.error('RFQ: Error creating settings definition:', errors);
+      throw new Error(`Failed to create settings definition: ${JSON.stringify(errors)}`);
+    }
+
+    if (createData?.errors) {
+      console.error('RFQ: GraphQL errors:', createData.errors);
+      throw new Error(`GraphQL error creating settings definition: ${JSON.stringify(createData.errors)}`);
     }
 
     console.log('RFQ: Shop-owned settings type created successfully!');
     return true;
   } catch (error) {
     console.error('RFQ: Error setting up settings metaobject definition:', error);
-    return false;
+    throw error;
   }
 }
 
@@ -219,16 +242,10 @@ export async function ensureRfqSettingsType(admin: any): Promise<boolean> {
 export async function ensureAllMetaobjectTypes(admin: any): Promise<boolean> {
   console.log('RFQ: Ensuring shop-owned metaobject definitions...');
   
-  const [submissionResult, settingsResult] = await Promise.all([
-    ensureRfqSubmissionType(admin),
-    ensureRfqSettingsType(admin)
-  ]);
+  // Run sequentially to avoid race conditions
+  await ensureRfqSettingsType(admin);
+  await ensureRfqSubmissionType(admin);
 
-  if (submissionResult && settingsResult) {
-    console.log('RFQ: All shop-owned metaobject types ready!');
-    return true;
-  }
-
-  console.warn('RFQ: Some metaobject types failed to initialize');
-  return false;
+  console.log('RFQ: All shop-owned metaobject types ready!');
+  return true;
 }

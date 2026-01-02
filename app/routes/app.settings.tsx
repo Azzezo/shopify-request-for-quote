@@ -147,7 +147,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
   } else {
     // Ensure the shop-owned metaobject definition exists before creating
-    await ensureRfqSettingsType(admin);
+    try {
+      await ensureRfqSettingsType(admin);
+    } catch (error) {
+      console.error("Failed to create metaobject definition:", error);
+      return json({ 
+        success: false, 
+        error: `Failed to create settings definition: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      }, { status: 500 });
+    }
     
     // Create new settings (shop-owned - persists after uninstall)
     const resp = await admin.graphql(CREATE_SETTINGS_MUTATION, {
