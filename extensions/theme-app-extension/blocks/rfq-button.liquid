@@ -20,7 +20,7 @@
 {%- endif -%}
 
 {% if rfq_enabled %}
-  <div class="rfq-container" data-product-id="{{ product.id }}" data-product-title="{{ product.title }}" data-variant-id="{{ product.selected_or_first_available_variant.id }}" data-variant-title="{{ product.selected_or_first_available_variant.title }}" data-shop="{{ shop.permanent_domain }}">
+  <div class="rfq-container" data-product-id="{{ product.id }}" data-product-title="{{ product.title }}" data-variant-id="{{ product.selected_or_first_available_variant.id }}" data-variant-title="{{ product.selected_or_first_available_variant.title }}" data-shop="{{ shop.permanent_domain }}" data-hide-price="{{ hide_price }}">
     
     {% if hide_price %}
       <style>
@@ -398,11 +398,69 @@
   <script>
     (function() {
       const container = document.querySelector('.rfq-container');
+      if (!container) return;
+
       const productId = container.dataset.productId;
       const productTitle = container.dataset.productTitle;
       const variantId = container.dataset.variantId;
       const variantTitle = container.dataset.variantTitle;
       const shop = container.dataset.shop;
+      const hidePrice = container.dataset.hidePrice === 'true' || container.dataset.hidePrice === '1';
+
+      const scope =
+        container.closest('[data-section-id]') ||
+        container.closest('.shopify-section') ||
+        container.closest('section') ||
+        container.closest('main') ||
+        document;
+
+      function hideDefaultUi() {
+        try {
+          const addToCartSelectors = [
+            '.product-form__submit',
+            '.product-form__cart-submit',
+            '.add-to-cart',
+            '[data-add-to-cart]',
+            'button[name="add"]',
+            'form[action^="/cart/add"] button[type="submit"]',
+            'form[action*="/cart/add"] button[type="submit"]',
+            'form[action^="/cart/add"] input[type="submit"]',
+            'form[action*="/cart/add"] input[type="submit"]',
+            '[type="submit"][name="add"]',
+          ];
+
+          scope.querySelectorAll(addToCartSelectors.join(',')).forEach((el) => {
+            el.style.setProperty('display', 'none', 'important');
+          });
+
+          if (hidePrice) {
+            const priceSelectors = [
+              '.price',
+              '.product-price',
+              '.product__price',
+              '.product-single__price',
+              '[class*="price"]',
+              '[data-price]',
+              '[data-product-price]',
+            ];
+            scope.querySelectorAll(priceSelectors.join(',')).forEach((el) => {
+              el.style.setProperty('display', 'none', 'important');
+            });
+          }
+        } catch (e) {
+          // no-op
+        }
+      }
+
+      hideDefaultUi();
+
+      // Some themes re-render buy buttons/prices when variants change. Keep hiding on mutations.
+      try {
+        const observer = new MutationObserver(() => hideDefaultUi());
+        observer.observe(scope, { childList: true, subtree: true });
+      } catch (e) {
+        // no-op
+      }
 
       window.openRfqModal = function() {
         document.getElementById('rfq-modal').style.display = 'flex';
