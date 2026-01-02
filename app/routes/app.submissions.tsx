@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useSubmit, useNavigation, useSearchParams } from "@remix-run/react";
+import { useLoaderData, useSubmit, useNavigation, useSearchParams, useFetcher } from "@remix-run/react";
 import {
   Page,
   Layout,
@@ -17,7 +17,8 @@ import {
   Pagination,
   InlineStack,
 } from "@shopify/polaris";
-import { useState, useCallback } from "react";
+import { ExportIcon } from "@shopify/polaris-icons";
+import { useState, useCallback, useEffect } from "react";
 import { authenticate } from "../shopify.server";
 
 import { RFQ_SUBMISSION_TYPE } from "../services/metaobject-setup.server";
@@ -71,6 +72,63 @@ const DELETE_SUBMISSION_MUTATION = `
     }
   }
 `;
+
+// Query to fetch all submissions for export (no pagination limit)
+const GET_ALL_SUBMISSIONS_QUERY = `
+  query GetAllRfqSubmissions($type: String!, $query: String, $cursor: String) {
+    metaobjects(type: $type, first: 250, after: $cursor, query: $query, sortKey: "updated_at", reverse: true) {
+      nodes {
+        id
+        handle
+        updatedAt
+        fields {
+          key
+          value
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+`;
+
+function escapeCSVField(field: string | null | undefined): string {
+  if (field === null || field === undefined) return "";
+  const str = String(field);
+  // If contains comma, newline, or quote, wrap in quotes and escape existing quotes
+  if (str.includes(",") || str.includes("\n") || str.includes('"')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+function generateCSV(submissions: Submission[]): string {
+  const headers = [
+    "Name",
+    "Email",
+    "Phone",
+    "Product",
+    "Variant",
+    "Request Details",
+    "Status",
+    "Date",
+  ];
+
+  const rows = submissions.map((s) => [
+    escapeCSVField(s.customerName),
+    escapeCSVField(s.customerEmail),
+    escapeCSVField(s.customerPhone),
+    escapeCSVField(s.productTitle),
+    escapeCSVField(s.variantTitle),
+    escapeCSVField(s.requestDetails),
+    escapeCSVField(s.status),
+    escapeCSVField(s.updatedAt ? new Date(s.updatedAt).toLocaleString() : ""),
+  ]);
+
+  return [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+}
 
 interface Submission {
   id: string;
@@ -160,10 +218,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
 
   const formData = await request.formData();
-  const action = formData.get("action") as string;
+  const actionType = formData.get("action") as string;
   const id = formData.get("id") as string;
 
-  if (action === "updateStatus") {
+  if (actionType === "updateStatus") {
     const status = formData.get("status") as string;
     await admin.graphql(UPDATE_SUBMISSION_MUTATION, {
       variables: {
@@ -173,12 +231,43 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         },
       },
     });
+    return json({ success: true });
   }
 
-  if (action === "delete") {
+  if (actionType === "delete") {
     await admin.graphql(DELETE_SUBMISSION_MUTATION, {
       variables: { id },
     });
+    return json({ success: true });
+  }
+
+  if (actionType === "exportCsv") {
+    const statusFilter = formData.get("status") as string;
+    let query = null;
+    if (statusFilter && statusFilter !== "all") {
+      query = `fields.status:${statusFilter}`;
+    }
+
+    // Fetch all submissions with cursor-based pagination
+    const allSubmissions: Submission[] = [];
+    let cursor: string | null = null;
+    let hasNextPage = true;
+
+    while (hasNextPage) {
+      const response = await admin.graphql(GET_ALL_SUBMISSIONS_QUERY, {
+        variables: { type: RFQ_SUBMISSION_TYPE, query, cursor },
+      });
+      const data = await response.json();
+      const nodes = data?.data?.metaobjects?.nodes || [];
+      const pageInfo = data?.data?.metaobjects?.pageInfo;
+
+      allSubmissions.push(...nodes.map(parseSubmissionFromMetaobject));
+      hasNextPage = pageInfo?.hasNextPage || false;
+      cursor = pageInfo?.endCursor || null;
+    }
+
+    const csv = generateCSV(allSubmissions);
+    return json({ success: true, csv, count: allSubmissions.length });
   }
 
   return json({ success: true });
@@ -189,9 +278,37 @@ export default function Submissions() {
   const submit = useSubmit();
   const navigation = useNavigation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const exportFetcher = useFetcher<{ success: boolean; csv?: string; count?: number }>();
 
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
   const [modalActive, setModalActive] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  // Handle CSV download when export completes
+  useEffect(() => {
+    if (exportFetcher.data?.csv) {
+      const blob = new Blob([exportFetcher.data.csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      const date = new Date().toISOString().split("T")[0];
+      const statusSuffix = currentStatus !== "all" ? `-${currentStatus}` : "";
+      link.download = `quote-submissions${statusSuffix}-${date}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setIsExporting(false);
+    }
+  }, [exportFetcher.data, currentStatus]);
+
+  const handleExportCsv = useCallback(() => {
+    setIsExporting(true);
+    exportFetcher.submit(
+      { action: "exportCsv", status: currentStatus },
+      { method: "post" }
+    );
+  }, [exportFetcher, currentStatus]);
 
   const resourceName = {
     singular: "submission",
@@ -320,10 +437,21 @@ export default function Submissions() {
 
   const hasPagination = pageInfo.hasNextPage || pageInfo.hasPreviousPage;
 
+  const exportLoading = isExporting || exportFetcher.state === "submitting";
+
   return (
     <Page
       title="Quote Submissions"
       backAction={{ content: "Home", url: "/app" }}
+      secondaryActions={[
+        {
+          content: exportLoading ? "Exporting..." : "Export CSV",
+          icon: ExportIcon,
+          onAction: handleExportCsv,
+          loading: exportLoading,
+          disabled: exportLoading || submissions.length === 0,
+        },
+      ]}
     >
       <Layout>
         <Layout.Section>
