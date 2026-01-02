@@ -5,7 +5,9 @@
       "not_enabled_body": "This block only appears when the product metafield “Enable Request for Quote” is set to true. Open a product in Shopify admin → Metafields → enable it, then refresh the theme editor preview.",
       "no_product_title": "Request for quote block added",
       "no_product_body": "Switch the theme editor preview to a product template (Products → Default product) so the block has access to a product.",
-      "debug": "Debug: rfq_enabled = {{ value }}"
+      "debug": "Debug: rfq_enabled = {{ value }}",
+      "debug_app": "Debug: app.rfq_enabled = {{ value }}",
+      "debug_custom": "Debug: custom.rfq_enabled = {{ value }}"
     },
     "button_text": "Request a Quote",
     "modal_title": "Request a Quote",

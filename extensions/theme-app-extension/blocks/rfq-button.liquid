@@ -552,6 +552,12 @@
         <p style="margin: 6px 0 0; font-size: 12px; color: #6b7280;">
           {{ 'request_for_quote.editor.debug' | t: value: rfq_enabled }}
         </p>
+        <p style="margin: 6px 0 0; font-size: 12px; color: #6b7280;">
+          {{ 'request_for_quote.editor.debug_app' | t: value: product.metafields.app.rfq_enabled.value }}
+        </p>
+        <p style="margin: 6px 0 0; font-size: 12px; color: #6b7280;">
+          {{ 'request_for_quote.editor.debug_custom' | t: value: product.metafields.custom.rfq_enabled.value }}
+        </p>
       {%- else -%}
         <strong>{{ 'request_for_quote.editor.no_product_title' | t }}</strong>
         <p style="margin: 6px 0 0;">
