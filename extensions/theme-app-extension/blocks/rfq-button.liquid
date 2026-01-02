@@ -558,6 +558,12 @@
         <p style="margin: 6px 0 0; font-size: 12px; color: #6b7280;">
           {{ 'request_for_quote.editor.debug_custom' | t: value: product.metafields.custom.rfq_enabled.value }}
         </p>
+        <details style="margin: 8px 0 0;">
+          <summary style="cursor: pointer; font-size: 12px; color: #2563eb;">
+            {{ 'request_for_quote.editor.debug_metafields_summary' | t }}
+          </summary>
+          <pre style="margin: 8px 0 0; padding: 8px; background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 11px; white-space: pre-wrap; word-break: break-word;">{{ product.metafields | json | truncate: 2000 }}</pre>
+        </details>
       {%- else -%}
         <strong>{{ 'request_for_quote.editor.no_product_title' | t }}</strong>
         <p style="margin: 6px 0 0;">
