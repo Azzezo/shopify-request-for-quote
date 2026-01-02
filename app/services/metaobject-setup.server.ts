@@ -59,16 +59,17 @@ export async function ensureRfqSubmissionType(admin: any): Promise<boolean> {
       return true;
     }
 
-    // Create the shop-owned metaobject definition
-    console.log('RFQ: Creating shop-owned submission type...');
+    // Create the merchant-owned metaobject definition
+    // Note: For merchant-owned metaobjects, we only set storefront access
+    // admin access is automatically full read/write for merchants and all apps
+    console.log('RFQ: Creating merchant-owned submission type...');
     const createResponse = await admin.graphql(CREATE_METAOBJECT_DEFINITION, {
       variables: {
         definition: {
           type: RFQ_SUBMISSION_TYPE,
           name: "Quote Submission",
           access: {
-            storefront: "NONE",
-            admin: "MERCHANT_READ_WRITE"
+            storefront: "NONE"
           },
           fieldDefinitions: [
             {
@@ -166,16 +167,17 @@ export async function ensureRfqSettingsType(admin: any): Promise<boolean> {
       return true;
     }
 
-    // Create the shop-owned metaobject definition
-    console.log('RFQ: Creating shop-owned settings type...');
+    // Create the merchant-owned metaobject definition
+    // Note: For merchant-owned metaobjects, we only set storefront access
+    // admin access is automatically full read/write for merchants and all apps
+    console.log('RFQ: Creating merchant-owned settings type...');
     const createResponse = await admin.graphql(CREATE_METAOBJECT_DEFINITION, {
       variables: {
         definition: {
           type: RFQ_SETTINGS_TYPE,
           name: "RFQ Settings",
           access: {
-            storefront: "PUBLIC_READ",
-            admin: "MERCHANT_READ_WRITE"
+            storefront: "PUBLIC_READ"
           },
           fieldDefinitions: [
             {
