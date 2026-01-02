@@ -76,8 +76,44 @@ name = "Success Message"
 type = "single_line_text_field"
 required = false
 
-# Quote Submission Metaobject 
-# NOTE: Submissions are now stored as SHOP-OWNED metaobjects (type: "rfq_submission")
-# instead of app-owned (type: "$app:rfq_submission").
-# This means submissions PERSIST even if the app is uninstalled!
-# The metaobject definition is created via API in app/services/metaobject-setup.server.ts
+# Quote Submission Metaobject - stores each quote request
+[metaobjects.app.rfq_submission]
+name = "Quote Submission"
+access.storefront = "none"
+access.admin = "merchant_read_write"
+
+[metaobjects.app.rfq_submission.fields.customer_name]
+name = "Customer Name"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.rfq_submission.fields.customer_email]
+name = "Customer Email"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.rfq_submission.fields.customer_phone]
+name = "Customer Phone"
+type = "single_line_text_field"
+required = false
+
+[metaobjects.app.rfq_submission.fields.product_title]
+name = "Product"
+type = "single_line_text_field"
+required = false
+
+[metaobjects.app.rfq_submission.fields.variant_title]
+name = "Variant"
+type = "single_line_text_field"
+required = false
+
+[metaobjects.app.rfq_submission.fields.request_details]
+name = "Request Details"
+type = "multi_line_text_field"
+required = false
+
+[metaobjects.app.rfq_submission.fields.status]
+name = "Status"
+type = "single_line_text_field"
+required = true
+validations.choices = ["pending", "contacted", "quoted", "completed", "cancelled"]
