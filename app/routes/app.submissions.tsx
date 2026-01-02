@@ -14,15 +14,19 @@ import {
   Modal,
   Button,
   Select,
+  Pagination,
+  InlineStack,
 } from "@shopify/polaris";
 import { useState, useCallback } from "react";
 import { authenticate } from "../shopify.server";
 
 import { RFQ_SUBMISSION_TYPE } from "../services/metaobject-setup.server";
 
+const PAGE_SIZE = 25;
+
 const GET_SUBMISSIONS_QUERY = `
-  query GetRfqSubmissions($type: String!, $query: String) {
-    metaobjects(type: $type, first: 100, query: $query, sortKey: "updated_at", reverse: true) {
+  query GetRfqSubmissions($type: String!, $first: Int, $last: Int, $after: String, $before: String, $query: String) {
+    metaobjects(type: $type, first: $first, last: $last, after: $after, before: $before, query: $query, sortKey: "updated_at", reverse: true) {
       nodes {
         id
         handle
@@ -31,6 +35,12 @@ const GET_SUBMISSIONS_QUERY = `
           key
           value
         }
+      }
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        startCursor
+        endCursor
       }
     }
   }
@@ -75,6 +85,13 @@ interface Submission {
   updatedAt: string;
 }
 
+interface PageInfo {
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+  startCursor: string | null;
+  endCursor: string | null;
+}
+
 function parseSubmissionFromMetaobject(metaobject: any): Submission {
   const fields = metaobject?.fields || [];
   const getValue = (key: string) => {
@@ -101,6 +118,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const url = new URL(request.url);
   const status = url.searchParams.get("status") || "all";
+  const after = url.searchParams.get("after");
+  const before = url.searchParams.get("before");
 
   // Build query filter
   let query = null;
@@ -108,14 +127,33 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     query = `fields.status:${status}`;
   }
 
-  const response = await admin.graphql(GET_SUBMISSIONS_QUERY, {
-    variables: { type: RFQ_SUBMISSION_TYPE, query },
-  });
+  // Determine pagination direction
+  let variables: any = { type: RFQ_SUBMISSION_TYPE, query };
+  
+  if (before) {
+    // Going backwards
+    variables.last = PAGE_SIZE;
+    variables.before = before;
+  } else {
+    // Going forwards or first page
+    variables.first = PAGE_SIZE;
+    if (after) {
+      variables.after = after;
+    }
+  }
+
+  const response = await admin.graphql(GET_SUBMISSIONS_QUERY, { variables });
   const data = await response.json();
 
   const submissions = (data?.data?.metaobjects?.nodes || []).map(parseSubmissionFromMetaobject);
+  const pageInfo: PageInfo = data?.data?.metaobjects?.pageInfo || {
+    hasNextPage: false,
+    hasPreviousPage: false,
+    startCursor: null,
+    endCursor: null,
+  };
 
-  return json({ submissions, currentStatus: status });
+  return json({ submissions, currentStatus: status, pageInfo });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -147,7 +185,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function Submissions() {
-  const { submissions, currentStatus } = useLoaderData<typeof loader>();
+  const { submissions, currentStatus, pageInfo } = useLoaderData<typeof loader>();
   const submit = useSubmit();
   const navigation = useNavigation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -190,6 +228,29 @@ export default function Submissions() {
   const closeModal = () => {
     setSelectedSubmission(null);
     setModalActive(false);
+  };
+
+  const handleNextPage = () => {
+    const params: Record<string, string> = {};
+    if (currentStatus !== "all") params.status = currentStatus;
+    if (pageInfo.endCursor) params.after = pageInfo.endCursor;
+    setSearchParams(params);
+  };
+
+  const handlePreviousPage = () => {
+    const params: Record<string, string> = {};
+    if (currentStatus !== "all") params.status = currentStatus;
+    if (pageInfo.startCursor) params.before = pageInfo.startCursor;
+    setSearchParams(params);
+  };
+
+  const handleStatusFilterChange = (value: string) => {
+    // Reset pagination when changing status filter
+    if (value === "all") {
+      setSearchParams({});
+    } else {
+      setSearchParams({ status: value });
+    }
   };
 
   const statusOptions = [
@@ -257,6 +318,8 @@ export default function Submissions() {
     </EmptyState>
   );
 
+  const hasPagination = pageInfo.hasNextPage || pageInfo.hasPreviousPage;
+
   return (
     <Page
       title="Quote Submissions"
@@ -266,41 +329,55 @@ export default function Submissions() {
         <Layout.Section>
           <Card padding="0">
             <div style={{ padding: "16px" }}>
-              <Select
-                label="Filter by status"
-                options={statusOptions}
-                value={currentStatus}
-                onChange={(value) => {
-                  if (value === "all") {
-                    setSearchParams({});
-                  } else {
-                    setSearchParams({ status: value });
-                  }
-                }}
-              />
+              <InlineStack align="space-between" blockAlign="center">
+                <Select
+                  label="Filter by status"
+                  labelInline
+                  options={statusOptions}
+                  value={currentStatus}
+                  onChange={handleStatusFilterChange}
+                />
+                {submissions.length > 0 && (
+                  <Text as="span" variant="bodySm" tone="subdued">
+                    Showing {submissions.length} submission{submissions.length !== 1 ? "s" : ""}
+                  </Text>
+                )}
+              </InlineStack>
             </div>
             {submissions.length === 0 ? (
               emptyStateMarkup
             ) : (
-              <IndexTable
-                resourceName={resourceName}
-                itemCount={submissions.length}
-                selectedItemsCount={
-                  allResourcesSelected ? "All" : selectedResources.length
-                }
-                onSelectionChange={handleSelectionChange}
-                headings={[
-                  { title: "Name" },
-                  { title: "Email" },
-                  { title: "Phone" },
-                  { title: "Product" },
-                  { title: "Status" },
-                  { title: "Date" },
-                  { title: "Actions" },
-                ]}
-              >
-                {rowMarkup}
-              </IndexTable>
+              <>
+                <IndexTable
+                  resourceName={resourceName}
+                  itemCount={submissions.length}
+                  selectedItemsCount={
+                    allResourcesSelected ? "All" : selectedResources.length
+                  }
+                  onSelectionChange={handleSelectionChange}
+                  headings={[
+                    { title: "Name" },
+                    { title: "Email" },
+                    { title: "Phone" },
+                    { title: "Product" },
+                    { title: "Status" },
+                    { title: "Date" },
+                    { title: "Actions" },
+                  ]}
+                >
+                  {rowMarkup}
+                </IndexTable>
+                {hasPagination && (
+                  <div style={{ padding: "16px", display: "flex", justifyContent: "center" }}>
+                    <Pagination
+                      hasPrevious={pageInfo.hasPreviousPage}
+                      hasNext={pageInfo.hasNextPage}
+                      onPrevious={handlePreviousPage}
+                      onNext={handleNextPage}
+                    />
+                  </div>
+                )}
+              </>
             )}
           </Card>
         </Layout.Section>
