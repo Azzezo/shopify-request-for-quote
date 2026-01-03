@@ -5,10 +5,8 @@ import {
   AdminBlock,
   BlockStack,
   Text,
-  Switch,
+  Checkbox,
   Banner,
-  InlineStack,
-  Icon,
 } from "@shopify/ui-extensions-react/admin";
 
 // The target for this extension - appears on product details page
@@ -17,7 +15,7 @@ const TARGET = "admin.product-details.block.render";
 export default reactExtension(TARGET, () => <RfqProductBlock />);
 
 function RfqProductBlock() {
-  const { data, query, applyMetafieldsChange } = useApi(TARGET);
+  const { data, query } = useApi(TARGET);
   
   const [rfqEnabled, setRfqEnabled] = useState(false);
   const [hidePrice, setHidePrice] = useState(false);
@@ -72,6 +70,45 @@ function RfqProductBlock() {
     fetchMetafields();
   }, [productId, query]);
 
+  // Update metafield via GraphQL mutation
+  async function updateMetafield(namespace, key, value) {
+    const mutation = `
+      mutation UpdateProductMetafield($input: ProductInput!) {
+        productUpdate(input: $input) {
+          product {
+            id
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+
+    const result = await query(mutation, {
+      variables: {
+        input: {
+          id: productId,
+          metafields: [
+            {
+              namespace,
+              key,
+              value: String(value),
+              type: "boolean",
+            },
+          ],
+        },
+      },
+    });
+
+    if (result?.data?.productUpdate?.userErrors?.length > 0) {
+      throw new Error(result.data.productUpdate.userErrors[0].message);
+    }
+
+    return result;
+  }
+
   // Handle RFQ toggle
   const handleRfqToggle = async (checked) => {
     setSaving(true);
@@ -79,14 +116,7 @@ function RfqProductBlock() {
     setSuccess(false);
 
     try {
-      await applyMetafieldsChange({
-        type: "updateMetafield",
-        namespace: "app",
-        key: "rfq_enabled",
-        value: checked ? "true" : "false",
-        valueType: "boolean",
-      });
-      
+      await updateMetafield("app", "rfq_enabled", checked);
       setRfqEnabled(checked);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 2000);
@@ -105,14 +135,7 @@ function RfqProductBlock() {
     setSuccess(false);
 
     try {
-      await applyMetafieldsChange({
-        type: "updateMetafield",
-        namespace: "app",
-        key: "rfq_hide_price",
-        value: checked ? "true" : "false",
-        valueType: "boolean",
-      });
-      
+      await updateMetafield("app", "rfq_hide_price", checked);
       setHidePrice(checked);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 2000);
@@ -147,7 +170,7 @@ function RfqProductBlock() {
           </Banner>
         )}
 
-        <Switch
+        <Checkbox
           label="Enable Request for Quote"
           checked={rfqEnabled}
           disabled={saving}
@@ -163,7 +186,7 @@ function RfqProductBlock() {
 
         {rfqEnabled && (
           <BlockStack gap="small">
-            <Switch
+            <Checkbox
               label="Hide product price"
               checked={hidePrice}
               disabled={saving}
@@ -181,4 +204,3 @@ function RfqProductBlock() {
     </AdminBlock>
   );
 }
-
