@@ -1,0 +1,16 @@
+{
+  "name": "rfq-product-block",
+  "version": "1.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "shopify app build --skip-dependencies-installation",
+    "dev": "shopify app dev --skip-dependencies-installation"
+  },
+  "dependencies": {
+    "@shopify/ui-extensions": "^2024.10.0",
+    "@shopify/ui-extensions-react": "^2024.10.0",
+    "react": "^18.2.0"
+  }
+}
+
