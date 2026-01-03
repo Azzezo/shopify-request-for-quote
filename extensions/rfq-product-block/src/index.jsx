@@ -41,11 +41,11 @@ function RfqProductBlock() {
           body: JSON.stringify({
             query: `query GetProductMetafields($id: ID!) {
               product(id: $id) {
-                rfqEnabled: metafield(namespace: "app", key: "rfq_enabled") {
+                rfqEnabled: metafield(namespace: "custom", key: "rfq_enabled") {
                   id
                   value
                 }
-                rfqHidePrice: metafield(namespace: "app", key: "rfq_hide_price") {
+                rfqHidePrice: metafield(namespace: "custom", key: "rfq_hide_price") {
                   id
                   value
                 }
@@ -123,7 +123,7 @@ function RfqProductBlock() {
     setSuccess(false);
 
     try {
-      await updateMetafield("app", "rfq_enabled", checked);
+      await updateMetafield("custom", "rfq_enabled", checked);
       setRfqEnabled(checked);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 2000);
@@ -142,7 +142,7 @@ function RfqProductBlock() {
     setSuccess(false);
 
     try {
-      await updateMetafield("app", "rfq_hide_price", checked);
+      await updateMetafield("custom", "rfq_hide_price", checked);
       setHidePrice(checked);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 2000);

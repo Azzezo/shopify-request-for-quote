@@ -11,19 +11,19 @@
 {%- assign hide_price = false -%}
 
 {%- comment -%}
-  Check for app-owned metafield using $app reserved namespace prefix.
-  The $app prefix is required for theme app extensions to access their own app's metafields.
+  Check for RFQ metafields in custom namespace (set by admin block) or $app namespace (legacy).
+  The custom namespace metafields have storefront read access via metafield definitions.
 {%- endcomment -%}
-{%- if product and product.metafields["$app"].rfq_enabled != blank -%}
-  {%- assign rfq_enabled = product.metafields["$app"].rfq_enabled.value -%}
-{%- elsif product and product.metafields.custom.rfq_enabled != blank -%}
+{%- if product and product.metafields.custom.rfq_enabled != blank -%}
   {%- assign rfq_enabled = product.metafields.custom.rfq_enabled.value -%}
+{%- elsif product and product.metafields["$app"].rfq_enabled != blank -%}
+  {%- assign rfq_enabled = product.metafields["$app"].rfq_enabled.value -%}
 {%- endif -%}
 
-{%- if product and product.metafields["$app"].rfq_hide_price != blank -%}
-  {%- assign hide_price = product.metafields["$app"].rfq_hide_price.value -%}
-{%- elsif product and product.metafields.custom.rfq_hide_price != blank -%}
+{%- if product and product.metafields.custom.rfq_hide_price != blank -%}
   {%- assign hide_price = product.metafields.custom.rfq_hide_price.value -%}
+{%- elsif product and product.metafields["$app"].rfq_hide_price != blank -%}
+  {%- assign hide_price = product.metafields["$app"].rfq_hide_price.value -%}
 {%- endif -%}
 
 {% if rfq_enabled %}
