@@ -251,3 +251,132 @@ export async function ensureAllMetaobjectTypes(admin: any): Promise<boolean> {
   console.log('RFQ: All shop-owned metaobject types ready!');
   return true;
 }
+
+// ============================================
+// METAFIELD DEFINITIONS
+// ============================================
+// These allow the admin block extension to write metafields
+// that are readable by the storefront theme extension
+
+const GET_METAFIELD_DEFINITION = `
+  query GetMetafieldDefinition($namespace: String!, $key: String!, $ownerType: MetafieldOwnerType!) {
+    metafieldDefinitions(first: 1, namespace: $namespace, key: $key, ownerType: $ownerType) {
+      nodes {
+        id
+        namespace
+        key
+      }
+    }
+  }
+`;
+
+const CREATE_METAFIELD_DEFINITION = `
+  mutation CreateMetafieldDefinition($definition: MetafieldDefinitionInput!) {
+    metafieldDefinitionCreate(definition: $definition) {
+      createdDefinition {
+        id
+        namespace
+        key
+      }
+      userErrors {
+        field
+        message
+        code
+      }
+    }
+  }
+`;
+
+/**
+ * Ensures a product metafield definition exists with storefront read access.
+ */
+async function ensureProductMetafieldDefinition(
+  admin: any, 
+  namespace: string, 
+  key: string, 
+  name: string, 
+  description: string
+): Promise<boolean> {
+  try {
+    // Check if definition exists
+    const checkResponse = await admin.graphql(GET_METAFIELD_DEFINITION, {
+      variables: { namespace, key, ownerType: "PRODUCT" }
+    });
+    const checkData = await checkResponse.json();
+    
+    if (checkData?.data?.metafieldDefinitions?.nodes?.length > 0) {
+      console.log(`RFQ: Metafield definition ${namespace}.${key} already exists`);
+      return true;
+    }
+
+    // Create definition with storefront access
+    console.log(`RFQ: Creating metafield definition ${namespace}.${key}...`);
+    const createResponse = await admin.graphql(CREATE_METAFIELD_DEFINITION, {
+      variables: {
+        definition: {
+          namespace,
+          key,
+          name,
+          description,
+          type: "boolean",
+          ownerType: "PRODUCT",
+          access: {
+            admin: "MERCHANT_READ_WRITE",
+            storefront: "PUBLIC_READ"
+          }
+        }
+      }
+    });
+
+    const createData = await createResponse.json();
+    
+    if (createData?.data?.metafieldDefinitionCreate?.userErrors?.length > 0) {
+      const errors = createData.data.metafieldDefinitionCreate.userErrors;
+      // Ignore "already exists" errors
+      if (!errors.some((e: any) => e.code === "TAKEN")) {
+        console.error(`RFQ: Error creating metafield definition ${namespace}.${key}:`, errors);
+        return false;
+      }
+    }
+
+    console.log(`RFQ: Metafield definition ${namespace}.${key} created successfully`);
+    return true;
+  } catch (error) {
+    console.error(`RFQ: Error ensuring metafield definition ${namespace}.${key}:`, error);
+    return false;
+  }
+}
+
+/**
+ * Ensures all product metafield definitions exist for RFQ functionality.
+ * This allows the admin block to set metafields that the storefront can read.
+ */
+export async function ensureProductMetafieldDefinitions(admin: any): Promise<boolean> {
+  console.log('RFQ: Ensuring product metafield definitions...');
+  
+  const results = await Promise.all([
+    ensureProductMetafieldDefinition(
+      admin,
+      "custom",
+      "rfq_enabled",
+      "Enable Request for Quote",
+      "When enabled, the Add to Cart button will be replaced with a Request for Quote button"
+    ),
+    ensureProductMetafieldDefinition(
+      admin,
+      "custom",
+      "rfq_hide_price",
+      "Hide Price",
+      "When enabled, the product price will be hidden when RFQ is active"
+    )
+  ]);
+
+  const allSuccess = results.every(r => r);
+  if (allSuccess) {
+    console.log('RFQ: All product metafield definitions ready!');
+  } else {
+    console.warn('RFQ: Some metafield definitions failed to create');
+  }
+  
+  return allSuccess;
+}
