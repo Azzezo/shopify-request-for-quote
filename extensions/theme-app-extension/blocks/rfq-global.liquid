@@ -1,0 +1,248 @@
+{% comment %}
+  RFQ Global Embed
+  This app embed runs on ALL pages to hide prices and add-to-cart buttons
+  for products that have RFQ enabled, even on collection pages and sliders.
+{% endcomment %}
+
+<style id="rfq-global-styles">
+  /* These styles will be applied dynamically via JavaScript for RFQ products */
+  .rfq-hide-price .price,
+  .rfq-hide-price .price__container,
+  .rfq-hide-price .price-box,
+  .rfq-hide-price .product-price,
+  .rfq-hide-price .price-item,
+  .rfq-hide-price .product__price,
+  .rfq-hide-price [data-price],
+  .rfq-hide-price .money,
+  .rfq-hide-price .price--on-sale,
+  .rfq-hide-price .price-regular,
+  .rfq-hide-price .price-sale,
+  .rfq-hide-price .card__information .price {
+    display: none !important;
+    visibility: hidden !important;
+  }
+  
+  .rfq-hide-cart .quick-add,
+  .rfq-hide-cart .quick-add-button,
+  .rfq-hide-cart .quick-add__submit,
+  .rfq-hide-cart .product-form__submit,
+  .rfq-hide-cart .add-to-cart,
+  .rfq-hide-cart [data-add-to-cart],
+  .rfq-hide-cart .btn-addtocart,
+  .rfq-hide-cart .card__button,
+  .rfq-hide-cart .product-card__button {
+    display: none !important;
+    visibility: hidden !important;
+  }
+</style>
+
+<script>
+(function() {
+  'use strict';
+  
+  const SHOP = '{{ shop.permanent_domain }}';
+  
+  // Cache to avoid repeated API calls
+  const rfqCache = new Map();
+  let pendingHandles = new Set();
+  let fetchTimeout = null;
+  
+  // Selectors for product cards/links - covers most themes
+  const PRODUCT_LINK_SELECTORS = [
+    'a[href*="/products/"]',
+    '[data-product-handle]'
+  ].join(',');
+  
+  // Selectors for product containers that should receive the class
+  const PRODUCT_CONTAINER_SELECTORS = [
+    '.product-card',
+    '.product-item', 
+    '.product-grid-item',
+    '.collection-product-card',
+    '.card--product',
+    '.card-wrapper',
+    '.grid__item',
+    '.product-card-wrapper',
+    'li.grid__item',
+    '.product',
+    '.featured-product'
+  ];
+  
+  // Extract product handle from URL
+  function getHandleFromUrl(url) {
+    if (!url) return null;
+    const match = url.match(/\/products\/([^\/\?#]+)/);
+    return match ? decodeURIComponent(match[1]) : null;
+  }
+  
+  // Find the product container for an element
+  function findProductContainer(element) {
+    for (const selector of PRODUCT_CONTAINER_SELECTORS) {
+      const container = element.closest(selector);
+      if (container) return container;
+    }
+    // Fallback: find nearest element with product link
+    return element.closest('[data-product-handle]') || element.parentElement;
+  }
+  
+  // Batch fetch RFQ status for multiple handles
+  async function fetchRfqStatus(handles) {
+    if (handles.length === 0) return;
+    
+    try {
+      const response = await fetch(`/apps/rfq?action=check-products&shop=${SHOP}&handles=${handles.join(',')}`);
+      if (!response.ok) {
+        console.warn('RFQ: Failed to fetch product status');
+        return;
+      }
+      
+      const data = await response.json();
+      
+      // Update cache with results
+      if (data.products) {
+        for (const [handle, status] of Object.entries(data.products)) {
+          rfqCache.set(handle, status);
+        }
+      }
+      
+      // Mark handles with no data as not RFQ
+      for (const handle of handles) {
+        if (!rfqCache.has(handle)) {
+          rfqCache.set(handle, { rfqEnabled: false, hidePrice: false });
+        }
+      }
+      
+      // Apply styles
+      applyStyles();
+    } catch (error) {
+      console.warn('RFQ: Error fetching product status:', error);
+    }
+  }
+  
+  // Queue handles for batch fetching
+  function queueHandleFetch(handle) {
+    if (rfqCache.has(handle) || pendingHandles.has(handle)) return;
+    
+    pendingHandles.add(handle);
+    
+    // Debounce the fetch
+    clearTimeout(fetchTimeout);
+    fetchTimeout = setTimeout(() => {
+      const handles = Array.from(pendingHandles);
+      pendingHandles.clear();
+      fetchRfqStatus(handles);
+    }, 100);
+  }
+  
+  // Apply styles to all processed products
+  function applyStyles() {
+    document.querySelectorAll('[data-rfq-handle]').forEach(element => {
+      const handle = element.dataset.rfqHandle;
+      const status = rfqCache.get(handle);
+      
+      if (status?.rfqEnabled) {
+        element.classList.add('rfq-hide-cart');
+        if (status.hidePrice) {
+          element.classList.add('rfq-hide-price');
+        }
+      }
+    });
+  }
+  
+  // Process a product link/element
+  function processElement(element) {
+    // Get the handle
+    let handle = element.dataset?.productHandle;
+    
+    if (!handle) {
+      const href = element.href || element.querySelector('a[href*="/products/"]')?.href;
+      handle = getHandleFromUrl(href);
+    }
+    
+    if (!handle) return;
+    
+    // Find the container to apply styles to
+    const container = findProductContainer(element);
+    if (!container || container.dataset.rfqHandle) return;
+    
+    // Mark this container
+    container.dataset.rfqHandle = handle;
+    
+    // Check cache or queue for fetch
+    if (rfqCache.has(handle)) {
+      const status = rfqCache.get(handle);
+      if (status?.rfqEnabled) {
+        container.classList.add('rfq-hide-cart');
+        if (status.hidePrice) {
+          container.classList.add('rfq-hide-price');
+        }
+      }
+    } else {
+      queueHandleFetch(handle);
+    }
+  }
+  
+  // Process all product elements on the page
+  function processPage() {
+    document.querySelectorAll(PRODUCT_LINK_SELECTORS).forEach(processElement);
+  }
+  
+  // Watch for dynamically added products
+  function setupObserver() {
+    const observer = new MutationObserver((mutations) => {
+      let shouldProcess = false;
+      
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (node.nodeType === 1) { // Element node
+            shouldProcess = true;
+            break;
+          }
+        }
+        if (shouldProcess) break;
+      }
+      
+      if (shouldProcess) {
+        clearTimeout(window.rfqProcessTimeout);
+        window.rfqProcessTimeout = setTimeout(processPage, 150);
+      }
+    });
+    
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+  }
+  
+  // Initialize
+  function init() {
+    processPage();
+    setupObserver();
+    
+    // Re-process on navigation (for SPAs/instant page libraries)
+    document.addEventListener('shopify:section:load', processPage);
+    document.addEventListener('turbo:load', processPage);
+    document.addEventListener('page:load', processPage);
+  }
+  
+  // Run when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+
+{% schema %}
+{
+  "name": "RFQ Global Settings",
+  "target": "body",
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "This embed hides prices and add-to-cart buttons for RFQ-enabled products across your entire store (collection pages, sliders, search results, etc.)"
+    }
+  ]
+}
+{% endschema %}

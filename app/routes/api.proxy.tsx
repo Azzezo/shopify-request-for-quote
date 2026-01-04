@@ -70,6 +70,39 @@ const GET_SETTINGS_QUERY = `
   }
 `;
 
+const GET_PRODUCTS_RFQ_STATUS = `
+  query GetProductsRfqStatus($handles: [String!]!) {
+    products(first: 50, query: "") {
+      nodes {
+        id
+        handle
+        rfqEnabled: metafield(namespace: "custom", key: "rfq_enabled") {
+          value
+        }
+        rfqHidePrice: metafield(namespace: "custom", key: "rfq_hide_price") {
+          value
+        }
+      }
+    }
+  }
+`;
+
+// Query for single product by handle
+const GET_PRODUCT_BY_HANDLE = `
+  query GetProductByHandle($handle: String!) {
+    productByHandle(handle: $handle) {
+      id
+      handle
+      rfqEnabled: metafield(namespace: "custom", key: "rfq_enabled") {
+        value
+      }
+      rfqHidePrice: metafield(namespace: "custom", key: "rfq_hide_price") {
+        value
+      }
+    }
+  }
+`;
+
 const CREATE_SUBMISSION_MUTATION = `
   mutation CreateRfqSubmission($metaobject: MetaobjectCreateInput!) {
     metaobjectCreate(metaobject: $metaobject) {
@@ -85,10 +118,11 @@ const CREATE_SUBMISSION_MUTATION = `
   }
 `;
 
-// Handle GET requests - return app settings for the storefront
+// Handle GET requests - return app settings or check product RFQ status
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const shop = url.searchParams.get("shop");
+  const action = url.searchParams.get("action");
 
   if (!shop) {
     return json({ error: "Shop parameter required" }, { status: 400, headers: corsHeaders });
@@ -97,6 +131,46 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
     const { admin } = await unauthenticated.admin(shop);
     
+    // Check product RFQ status
+    if (action === "check-products") {
+      const handles = url.searchParams.get("handles")?.split(",").filter(Boolean) || [];
+      
+      if (handles.length === 0) {
+        return json({ products: {} }, { headers: corsHeaders });
+      }
+      
+      // Fetch each product's RFQ status
+      const products: Record<string, { rfqEnabled: boolean; hidePrice: boolean }> = {};
+      
+      // Process in batches to avoid too many concurrent requests
+      const batchSize = 10;
+      for (let i = 0; i < handles.length; i += batchSize) {
+        const batch = handles.slice(i, i + batchSize);
+        
+        await Promise.all(batch.map(async (handle) => {
+          try {
+            const response = await admin.graphql(GET_PRODUCT_BY_HANDLE, {
+              variables: { handle }
+            });
+            const data = await response.json();
+            const product = data?.data?.productByHandle;
+            
+            if (product) {
+              products[handle] = {
+                rfqEnabled: product.rfqEnabled?.value === "true",
+                hidePrice: product.rfqHidePrice?.value === "true"
+              };
+            }
+          } catch (err) {
+            console.error(`Error fetching product ${handle}:`, err);
+          }
+        }));
+      }
+      
+      return json({ products }, { headers: corsHeaders });
+    }
+    
+    // Default: return settings
     // Ensure the shop-owned settings definition exists
     await ensureRfqSettingsType(admin);
     
