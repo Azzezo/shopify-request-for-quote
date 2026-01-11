@@ -1,11 +1,17 @@
 {% comment %}
   RFQ Global Embed
-  This app embed runs on ALL pages to hide prices and add-to-cart buttons
-  for products that have RFQ enabled, even on collection pages and sliders.
+  This app embed runs on ALL pages to:
+  1. Hide prices and add-to-cart buttons for RFQ products on collection pages
+  2. Hide prices from SEO structured data (JSON-LD)
+  3. Add "Request Quote" badges to RFQ products
+  
+  IMPORTANT: This must be ENABLED in Theme Editor > App Embeds
 {% endcomment %}
 
 <style id="rfq-global-styles">
-  /* These styles will be applied dynamically via JavaScript for RFQ products */
+  /* ===========================================
+     PRICE HIDING - Applied to .rfq-hide-price containers
+     =========================================== */
   .rfq-hide-price .price,
   .rfq-hide-price .price__container,
   .rfq-hide-price .price-box,
@@ -17,11 +23,35 @@
   .rfq-hide-price .price--on-sale,
   .rfq-hide-price .price-regular,
   .rfq-hide-price .price-sale,
-  .rfq-hide-price .card__information .price {
+  .rfq-hide-price .price__regular,
+  .rfq-hide-price .price__sale,
+  .rfq-hide-price .card__information .price,
+  .rfq-hide-price .card-information .price,
+  .rfq-hide-price .product-card__price,
+  .rfq-hide-price .product-item__price,
+  .rfq-hide-price .product-grid-item__price,
+  .rfq-hide-price .collection-product-card__price,
+  .rfq-hide-price span[class*="price"],
+  .rfq-hide-price div[class*="price"],
+  .rfq-hide-price .price-wrapper,
+  .rfq-hide-price .price-container,
+  .rfq-hide-price [class*="ProductPrice"],
+  .rfq-hide-price [class*="product-price"],
+  .rfq-hide-price [class*="Price"],
+  .rfq-hide-price .product-tile__price,
+  .rfq-hide-price .grid-product__price,
+  .rfq-hide-price .product-card-info__price,
+  /* Clenli theme specific */
+  .rfq-hide-price .product__price-and-badge,
+  .rfq-hide-price .tax-note,
+  .rfq-hide-price .unit-price {
     display: none !important;
     visibility: hidden !important;
   }
   
+  /* ===========================================
+     CART BUTTON HIDING - Applied to .rfq-hide-cart containers
+     =========================================== */
   .rfq-hide-cart .quick-add,
   .rfq-hide-cart .quick-add-button,
   .rfq-hide-cart .quick-add__submit,
@@ -29,10 +59,53 @@
   .rfq-hide-cart .add-to-cart,
   .rfq-hide-cart [data-add-to-cart],
   .rfq-hide-cart .btn-addtocart,
+  .rfq-hide-cart .btn-add-to-cart,
   .rfq-hide-cart .card__button,
-  .rfq-hide-cart .product-card__button {
+  .rfq-hide-cart .product-card__button,
+  .rfq-hide-cart .product-item__button,
+  .rfq-hide-cart .quick-buy,
+  .rfq-hide-cart .quick-buy-button,
+  .rfq-hide-cart .add-to-cart-button,
+  .rfq-hide-cart button[name="add"],
+  .rfq-hide-cart [type="submit"][name="add"],
+  .rfq-hide-cart .product-card__add-button,
+  .rfq-hide-cart .grid-product__add-to-cart,
+  .rfq-hide-cart .product-tile__add-to-cart,
+  .rfq-hide-cart form[action*="/cart/add"] button,
+  /* Clenli theme specific */
+  .rfq-hide-cart .shopify-payment-button,
+  .rfq-hide-cart .dynamic-checkout,
+  .rfq-hide-cart .additional-checkout-buttons {
     display: none !important;
     visibility: hidden !important;
+  }
+  
+  /* ===========================================
+     RFQ BADGE - Shown instead of price
+     =========================================== */
+  .rfq-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #6fb31a;
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 4px;
+  }
+  
+  .rfq-badge svg {
+    width: 12px;
+    height: 12px;
+  }
+  
+  /* Position the badge nicely in cards */
+  .rfq-hide-price .rfq-badge {
+    display: inline-flex !important;
   }
 </style>
 
@@ -41,6 +114,11 @@
   'use strict';
   
   const SHOP = '{{ shop.permanent_domain }}';
+  const DEBUG = false; // Set to true for console logging
+  
+  function log(...args) {
+    if (DEBUG) console.log('[RFQ Global]', ...args);
+  }
   
   // Cache to avoid repeated API calls
   const rfqCache = new Map();
@@ -50,7 +128,8 @@
   // Selectors for product cards/links - covers most themes
   const PRODUCT_LINK_SELECTORS = [
     'a[href*="/products/"]',
-    '[data-product-handle]'
+    '[data-product-handle]',
+    '[data-handle]'
   ].join(',');
   
   // Selectors for product containers that should receive the class
@@ -61,42 +140,64 @@
     '.collection-product-card',
     '.card--product',
     '.card-wrapper',
+    '.card',
     '.grid__item',
     '.product-card-wrapper',
     'li.grid__item',
     '.product',
-    '.featured-product'
+    '.featured-product',
+    '.product-tile',
+    '.grid-product',
+    '.collection-item',
+    // Shopify Dawn theme
+    '.card-product',
+    'product-card',
+    // Common wrappers
+    '.product-block',
+    '.product-item-container',
+    '[data-product-card]'
   ];
   
   // Extract product handle from URL
   function getHandleFromUrl(url) {
     if (!url) return null;
-    const match = url.match(/\/products\/([^\/\?#]+)/);
-    return match ? decodeURIComponent(match[1]) : null;
+    try {
+      const match = url.match(/\/products\/([^\/\?#]+)/);
+      return match ? decodeURIComponent(match[1]) : null;
+    } catch (e) {
+      return null;
+    }
   }
   
   // Find the product container for an element
   function findProductContainer(element) {
     for (const selector of PRODUCT_CONTAINER_SELECTORS) {
-      const container = element.closest(selector);
-      if (container) return container;
+      try {
+        const container = element.closest(selector);
+        if (container) return container;
+      } catch (e) {
+        continue;
+      }
     }
     // Fallback: find nearest element with product link
-    return element.closest('[data-product-handle]') || element.parentElement;
+    return element.closest('[data-product-handle]') || element.closest('[data-handle]') || element.parentElement?.parentElement;
   }
   
   // Batch fetch RFQ status for multiple handles
   async function fetchRfqStatus(handles) {
     if (handles.length === 0) return;
     
+    log('Fetching RFQ status for:', handles);
+    
     try {
       const response = await fetch(`/apps/rfq?action=check-products&shop=${SHOP}&handles=${handles.join(',')}`);
       if (!response.ok) {
-        console.warn('RFQ: Failed to fetch product status');
+        console.warn('RFQ Global: Failed to fetch product status, status:', response.status);
         return;
       }
       
       const data = await response.json();
+      log('RFQ status response:', data);
       
       // Update cache with results
       if (data.products) {
@@ -114,8 +215,11 @@
       
       // Apply styles
       applyStyles();
+      
+      // Also hide SEO data
+      hideSeoData();
     } catch (error) {
-      console.warn('RFQ: Error fetching product status:', error);
+      console.warn('RFQ Global: Error fetching product status:', error);
     }
   }
   
@@ -131,7 +235,7 @@
       const handles = Array.from(pendingHandles);
       pendingHandles.clear();
       fetchRfqStatus(handles);
-    }, 100);
+    }, 150);
   }
   
   // Apply styles to all processed products
@@ -144,15 +248,101 @@
         element.classList.add('rfq-hide-cart');
         if (status.hidePrice) {
           element.classList.add('rfq-hide-price');
+          
+          // Add RFQ badge if not already present
+          if (!element.querySelector('.rfq-badge')) {
+            const priceContainer = element.querySelector('.price, .price__container, .product-price, [data-price]');
+            if (priceContainer && priceContainer.parentElement) {
+              const badge = document.createElement('span');
+              badge.className = 'rfq-badge';
+              badge.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Request Quote';
+              priceContainer.parentElement.insertBefore(badge, priceContainer);
+            }
+          }
         }
+        log(`Applied RFQ styles to ${handle}:`, status);
       }
     });
   }
   
+  // Hide SEO structured data prices for RFQ products
+  function hideSeoData() {
+    // Find all JSON-LD scripts
+    document.querySelectorAll('script[type="application/ld+json"]').forEach(script => {
+      try {
+        const data = JSON.parse(script.textContent);
+        let modified = false;
+        
+        // Check if this is product data
+        if (data['@type'] === 'Product') {
+          const handle = getProductHandle();
+          if (handle && rfqCache.has(handle)) {
+            const status = rfqCache.get(handle);
+            if (status?.rfqEnabled && status?.hidePrice) {
+              // Remove price information from structured data
+              delete data.offers;
+              delete data.price;
+              delete data.priceCurrency;
+              modified = true;
+              log('Removed price from Product JSON-LD');
+            }
+          }
+        }
+        
+        // Handle ProductGroup or array of products
+        if (data['@type'] === 'ProductGroup' || Array.isArray(data)) {
+          // Handle array of products
+          const products = Array.isArray(data) ? data : [data];
+          products.forEach(product => {
+            if (product['@type'] === 'Product' && product.url) {
+              const handle = getHandleFromUrl(product.url);
+              if (handle && rfqCache.has(handle)) {
+                const status = rfqCache.get(handle);
+                if (status?.rfqEnabled && status?.hidePrice) {
+                  delete product.offers;
+                  delete product.price;
+                  delete product.priceCurrency;
+                  modified = true;
+                }
+              }
+            }
+          });
+        }
+        
+        if (modified) {
+          script.textContent = JSON.stringify(data);
+        }
+      } catch (e) {
+        // Invalid JSON, skip
+      }
+    });
+    
+    // Also remove Open Graph price meta tags for current product
+    const currentHandle = getProductHandle();
+    if (currentHandle && rfqCache.has(currentHandle)) {
+      const status = rfqCache.get(currentHandle);
+      if (status?.rfqEnabled && status?.hidePrice) {
+        const priceMetaTags = document.querySelectorAll('meta[property="product:price:amount"], meta[property="product:price:currency"], meta[property="og:price:amount"], meta[property="og:price:currency"]');
+        priceMetaTags.forEach(tag => {
+          tag.setAttribute('content', '');
+          log('Cleared price meta tag:', tag.getAttribute('property'));
+        });
+      }
+    }
+  }
+  
+  // Get current product handle from URL
+  function getProductHandle() {
+    return getHandleFromUrl(window.location.pathname);
+  }
+  
   // Process a product link/element
   function processElement(element) {
+    // Skip if element is inside an RFQ modal
+    if (element.closest('.rfq-modal')) return;
+    
     // Get the handle
-    let handle = element.dataset?.productHandle;
+    let handle = element.dataset?.productHandle || element.dataset?.handle;
     
     if (!handle) {
       const href = element.href || element.querySelector('a[href*="/products/"]')?.href;
@@ -184,10 +374,17 @@
   
   // Process all product elements on the page
   function processPage() {
+    log('Processing page for RFQ products...');
     document.querySelectorAll(PRODUCT_LINK_SELECTORS).forEach(processElement);
+    
+    // Also check current product page
+    const currentHandle = getProductHandle();
+    if (currentHandle && !rfqCache.has(currentHandle)) {
+      queueHandleFetch(currentHandle);
+    }
   }
   
-  // Watch for dynamically added products
+  // Watch for dynamically added products (infinite scroll, quick view, etc)
   function setupObserver() {
     const observer = new MutationObserver((mutations) => {
       let shouldProcess = false;
@@ -204,7 +401,7 @@
       
       if (shouldProcess) {
         clearTimeout(window.rfqProcessTimeout);
-        window.rfqProcessTimeout = setTimeout(processPage, 150);
+        window.rfqProcessTimeout = setTimeout(processPage, 200);
       }
     });
     
@@ -216,13 +413,26 @@
   
   // Initialize
   function init() {
+    log('Initializing RFQ Global...');
     processPage();
     setupObserver();
     
-    // Re-process on navigation (for SPAs/instant page libraries)
+    // Re-process on Shopify section events
     document.addEventListener('shopify:section:load', processPage);
+    document.addEventListener('shopify:section:select', processPage);
+    
+    // Re-process on SPA navigation events
     document.addEventListener('turbo:load', processPage);
     document.addEventListener('page:load', processPage);
+    
+    // Re-process when URL changes (for SPA themes)
+    let lastUrl = location.href;
+    new MutationObserver(() => {
+      if (location.href !== lastUrl) {
+        lastUrl = location.href;
+        setTimeout(processPage, 100);
+      }
+    }).observe(document.body, { subtree: true, childList: true });
   }
   
   // Run when DOM is ready
@@ -231,17 +441,29 @@
   } else {
     init();
   }
+  
+  // Also run after a short delay to catch lazy-loaded content
+  setTimeout(processPage, 1000);
+  setTimeout(processPage, 3000);
 })();
 </script>
 
 {% schema %}
 {
-  "name": "RFQ Global Settings",
+  "name": "RFQ Global (Collections)",
   "target": "body",
   "settings": [
     {
+      "type": "header",
+      "content": "About This Extension"
+    },
+    {
       "type": "paragraph",
-      "content": "This embed hides prices and add-to-cart buttons for RFQ-enabled products across your entire store (collection pages, sliders, search results, etc.)"
+      "content": "This app embed automatically hides prices and add-to-cart buttons for RFQ-enabled products on collection pages, search results, and product sliders."
+    },
+    {
+      "type": "paragraph",
+      "content": "It also removes price information from SEO structured data (JSON-LD) to prevent prices appearing in search results."
     }
   ]
 }
