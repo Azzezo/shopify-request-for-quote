@@ -88,16 +88,18 @@ const GET_PRODUCTS_RFQ_STATUS = `
 `;
 
 // Query for single product by handle
+// Check multiple namespaces where RFQ metafields might be stored
 const GET_PRODUCT_BY_HANDLE = `
   query GetProductByHandle($handle: String!) {
     productByHandle(handle: $handle) {
       id
       handle
-      rfqEnabled: metafield(namespace: "custom", key: "rfq_enabled") {
-        value
-      }
-      rfqHidePrice: metafield(namespace: "custom", key: "rfq_hide_price") {
-        value
+      metafields(first: 10) {
+        nodes {
+          namespace
+          key
+          value
+        }
       }
     }
   }
@@ -156,10 +158,24 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             const product = data?.data?.productByHandle;
             
             if (product) {
-              products[handle] = {
-                rfqEnabled: product.rfqEnabled?.value === "true",
-                hidePrice: product.rfqHidePrice?.value === "true"
-              };
+              // Check all metafields for rfq_enabled and rfq_hide_price
+              const metafields = product.metafields?.nodes || [];
+              let rfqEnabled = false;
+              let hidePrice = false;
+              
+              for (const mf of metafields) {
+                if (mf.key === "rfq_enabled" && mf.value === "true") {
+                  rfqEnabled = true;
+                  console.log(`RFQ: Found rfq_enabled=true in namespace "${mf.namespace}" for ${handle}`);
+                }
+                if (mf.key === "rfq_hide_price" && mf.value === "true") {
+                  hidePrice = true;
+                  console.log(`RFQ: Found rfq_hide_price=true in namespace "${mf.namespace}" for ${handle}`);
+                }
+              }
+              
+              products[handle] = { rfqEnabled, hidePrice };
+              console.log(`RFQ: Product ${handle} - enabled: ${rfqEnabled}, hidePrice: ${hidePrice}, metafields found: ${metafields.length}`);
             }
           } catch (err) {
             console.error(`Error fetching product ${handle}:`, err);
