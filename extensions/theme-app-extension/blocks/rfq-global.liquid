@@ -1010,9 +1010,159 @@
     }
   }
   
+  // Quick View / Quick Shop detection
+  // Themes inject modals/drawers dynamically with full product details.
+  // We need to detect these and hide prices/cart for RFQ products.
+  const QUICKVIEW_SELECTORS = [
+    'quick-add-modal',
+    '.quick-add-modal',
+    '.quick-view-modal',
+    '.quickview-modal',
+    '.quick-view',
+    '.quickview',
+    '.quick-shop-modal',
+    '.quick-shop',
+    '.product-quick-view',
+    '.product-quickview',
+    '[data-quick-view]',
+    '[data-quickview]',
+    '[data-quick-add-modal]',
+    '.drawer--quick-view',
+    '.drawer--quickview',
+    '.modal--quick-view',
+    '.modal--quickview',
+    // Clenli / common theme patterns
+    '.quick-view-content',
+    '.quickshop-content',
+    '.product-popup',
+    '.product-modal',
+    '.product-drawer'
+  ];
+
+  function processQuickViews() {
+    for (const selector of QUICKVIEW_SELECTORS) {
+      document.querySelectorAll(selector).forEach(processQuickViewElement);
+    }
+  }
+
+  function processQuickViewElement(modal) {
+    if (modal.dataset.rfqProcessed) return;
+
+    // Try to find the product handle from a link, form action, or data attribute inside the modal
+    let handle = null;
+
+    const productLink = modal.querySelector('a[href*="/products/"]');
+    if (productLink) {
+      handle = getHandleFromUrl(productLink.href);
+    }
+
+    if (!handle) {
+      const form = modal.querySelector('form[action*="/cart/add"]');
+      if (form) {
+        // Some forms have a data attribute or hidden input with the product URL
+        const productUrl = form.closest('[data-product-url]')?.dataset?.productUrl;
+        if (productUrl) handle = getHandleFromUrl(productUrl);
+      }
+    }
+
+    if (!handle) {
+      // Check for a product URL in the modal's own data attributes
+      const url = modal.dataset?.productUrl || modal.dataset?.url || modal.getAttribute('data-product-url');
+      if (url) handle = getHandleFromUrl(url);
+    }
+
+    if (!handle) {
+      // Try to extract from any /products/ link in the modal's inner HTML
+      const allLinks = modal.querySelectorAll('a[href*="/products/"]');
+      for (const link of allLinks) {
+        const h = getHandleFromUrl(link.href);
+        if (h) { handle = h; break; }
+      }
+    }
+
+    if (!handle) return;
+
+    modal.dataset.rfqProcessed = 'true';
+
+    const status = rfqCache.get(handle);
+    if (!status) {
+      // We don't have status yet — fetch it and reprocess
+      queueHandleFetch(handle);
+      // Re-check after fetch resolves
+      const checkInterval = setInterval(() => {
+        if (rfqCache.has(handle)) {
+          clearInterval(checkInterval);
+          applyQuickViewStyles(modal, handle);
+        }
+      }, 100);
+      // Stop checking after 5 seconds
+      setTimeout(() => clearInterval(checkInterval), 5000);
+      return;
+    }
+
+    applyQuickViewStyles(modal, handle);
+  }
+
+  function applyQuickViewStyles(modal, handle) {
+    const status = rfqCache.get(handle);
+    if (!status?.rfqEnabled) return;
+
+    // Hide cart/buy buttons
+    modal.classList.add('rfq-hide-cart');
+
+    // Hide price if configured
+    if (status.hidePrice) {
+      modal.classList.add('rfq-hide-price');
+
+      // Also hide price elements that don't match our class-based selectors
+      // (some quick views use unique selectors)
+      const priceSelectors = [
+        '.price', '.price__container', '.product-price', '.product__price',
+        '[data-price]', '.money', '.price-item', '.price--on-sale',
+        '.price-regular', '.price-sale', '.price__regular', '.price__sale',
+        '.product__price-and-badge', '.tax-note', '.unit-price',
+        '.product-single__price', '.current-price', '.price-wrapper',
+        '.price-container', 'span[class*="price"]', 'div[class*="price"]',
+        '[class*="ProductPrice"]', '[class*="product-price"]',
+        // Subtotal, quantity often shown in quick views
+        '.subtotal', '[data-subtotal]', '.product-subtotal'
+      ];
+      modal.querySelectorAll(priceSelectors.join(',')).forEach(el => {
+        el.style.display = 'none';
+      });
+    }
+
+    // Hide quantity selector
+    const qtySelectors = [
+      '.quantity', '.quantity-selector', '.quantity__wrapper',
+      '.product-form__quantity', '.product-quantity', '.product__quantity',
+      '.quantity-wrapper', '.quantity-input', '.quantity__input',
+      '[data-quantity-input]', '.qty-field', '.qty-wrapper',
+      'label[for*="quantity"]', '.quantity__label'
+    ];
+    modal.querySelectorAll(qtySelectors.join(',')).forEach(el => {
+      el.style.display = 'none';
+    });
+
+    // Hide add to cart / buy buttons
+    const cartSelectors = [
+      '.product-form__submit', 'button[name="add"]', '[data-add-to-cart]',
+      '.add-to-cart', '.btn-addtocart', 'form[action*="/cart/add"] button[type="submit"]',
+      '.shopify-payment-button', '.dynamic-checkout', '.additional-checkout-buttons'
+    ];
+    modal.querySelectorAll(cartSelectors.join(',')).forEach(el => {
+      el.style.display = 'none';
+    });
+
+    log(`Applied RFQ styles to quick view for ${handle}`);
+  }
+
   function processPage() {
     log('Processing page...');
     document.querySelectorAll(PRODUCT_LINK_SELECTORS).forEach(processElement);
+    
+    // Also check for quick view modals
+    processQuickViews();
     
     const currentHandle = getProductHandle();
     if (currentHandle && !rfqCache.has(currentHandle)) {
@@ -1023,12 +1173,18 @@
   function setupObserver() {
     const observer = new MutationObserver((mutations) => {
       let shouldProcess = false;
+      let hasQuickView = false;
       
       for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {
           if (node.nodeType === 1) {
             shouldProcess = true;
-            break;
+            // Check if any added node is or contains a quick view
+            if (node.matches && QUICKVIEW_SELECTORS.some(s => {
+              try { return node.matches(s) || node.querySelector(s); } catch(e) { return false; }
+            })) {
+              hasQuickView = true;
+            }
           }
         }
         if (shouldProcess) break;
@@ -1036,7 +1192,8 @@
       
       if (shouldProcess) {
         clearTimeout(processTimeout);
-        processTimeout = setTimeout(processPage, 200);
+        // Process quick views faster since they're user-triggered and visible immediately
+        processTimeout = setTimeout(processPage, hasQuickView ? 50 : 200);
       }
     });
     
