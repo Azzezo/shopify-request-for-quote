@@ -516,6 +516,33 @@
   const productNameEl = document.getElementById('rfq-global-product-name');
   const successCloseBtn = modal?.querySelector('.rfq-global-success-close');
   
+  // Price selectors used for DOM removal (not just CSS hiding)
+  const PRICE_ELEMENT_SELECTORS = [
+    '.price', '.price__container', '.price-box', '.product-price',
+    '.price-item', '.product__price', '[data-price]', '.money',
+    '.price--on-sale', '.price-regular', '.price-sale',
+    '.price__regular', '.price__sale', '.product-card__price',
+    '.product-item__price', '.product-grid-item__price',
+    '.collection-product-card__price', 'span[class*="price"]',
+    'div[class*="price"]', '.price-wrapper', '.price-container',
+    '[class*="ProductPrice"]', '[class*="product-price"]',
+    '.product-tile__price', '.grid-product__price',
+    '.product-card-info__price', '.product__price-and-badge',
+    '.tax-note', '.unit-price', '.product-single__price',
+    '.current-price', '.subtotal', '[data-subtotal]',
+    '.product-subtotal'
+  ];
+
+  // Remove price elements from the DOM entirely within a container.
+  // CSS hides them instantly; this ensures they can't be found via Inspect Element.
+  function removePriceElementsFrom(container) {
+    container.querySelectorAll(PRICE_ELEMENT_SELECTORS.join(',')).forEach(el => {
+      // Don't remove elements inside our own RFQ modals
+      if (el.closest('.rfq-global-modal') || el.closest('.rfq-modal')) return;
+      el.remove();
+    });
+  }
+
   // Selectors
   const PRODUCT_LINK_SELECTORS = [
     'a[href*="/products/"]',
@@ -848,6 +875,8 @@
       
       if (status.hidePrice) {
         element.classList.add('rfq-hide-price');
+        // Remove price elements from the DOM so they can't be found via Inspect Element
+        removePriceElementsFrom(element);
       } else {
         element.classList.remove('rfq-hide-price');
       }
@@ -1107,32 +1136,16 @@
     const status = rfqCache.get(handle);
     if (!status?.rfqEnabled) return;
 
-    // Hide cart/buy buttons
+    // Hide cart/buy buttons (CSS class + DOM removal)
     modal.classList.add('rfq-hide-cart');
 
-    // Hide price if configured
+    // Remove price elements from the DOM if configured
     if (status.hidePrice) {
       modal.classList.add('rfq-hide-price');
-
-      // Also hide price elements that don't match our class-based selectors
-      // (some quick views use unique selectors)
-      const priceSelectors = [
-        '.price', '.price__container', '.product-price', '.product__price',
-        '[data-price]', '.money', '.price-item', '.price--on-sale',
-        '.price-regular', '.price-sale', '.price__regular', '.price__sale',
-        '.product__price-and-badge', '.tax-note', '.unit-price',
-        '.product-single__price', '.current-price', '.price-wrapper',
-        '.price-container', 'span[class*="price"]', 'div[class*="price"]',
-        '[class*="ProductPrice"]', '[class*="product-price"]',
-        // Subtotal, quantity often shown in quick views
-        '.subtotal', '[data-subtotal]', '.product-subtotal'
-      ];
-      modal.querySelectorAll(priceSelectors.join(',')).forEach(el => {
-        el.style.display = 'none';
-      });
+      removePriceElementsFrom(modal);
     }
 
-    // Hide quantity selector
+    // Remove quantity selectors from the DOM
     const qtySelectors = [
       '.quantity', '.quantity-selector', '.quantity__wrapper',
       '.product-form__quantity', '.product-quantity', '.product__quantity',
@@ -1140,19 +1153,15 @@
       '[data-quantity-input]', '.qty-field', '.qty-wrapper',
       'label[for*="quantity"]', '.quantity__label'
     ];
-    modal.querySelectorAll(qtySelectors.join(',')).forEach(el => {
-      el.style.display = 'none';
-    });
+    modal.querySelectorAll(qtySelectors.join(',')).forEach(el => el.remove());
 
-    // Hide add to cart / buy buttons
+    // Remove add to cart / buy buttons from the DOM
     const cartSelectors = [
       '.product-form__submit', 'button[name="add"]', '[data-add-to-cart]',
       '.add-to-cart', '.btn-addtocart', 'form[action*="/cart/add"] button[type="submit"]',
       '.shopify-payment-button', '.dynamic-checkout', '.additional-checkout-buttons'
     ];
-    modal.querySelectorAll(cartSelectors.join(',')).forEach(el => {
-      el.style.display = 'none';
-    });
+    modal.querySelectorAll(cartSelectors.join(',')).forEach(el => el.remove());
 
     log(`Applied RFQ styles to quick view for ${handle}`);
   }

@@ -767,9 +767,32 @@
         log('Form not found inside modal!');
       }
 
-      /* Note: hiding of add-to-cart, quantity, dynamic checkout, and price elements
-         is handled entirely by the CSS <style> block above.
-         No JS-based hiding is needed. */
+      // Remove price elements from the DOM entirely (not just CSS-hidden).
+      // CSS hides them instantly to prevent flash; JS then strips them so
+      // they can't be found via Inspect Element or DOM scrapers.
+      if (hidePrice) {
+        const priceSelectors = [
+          '.price', '.price-box', '.product-price', '.product__price',
+          '.product-single__price', '.current-price', '.tax-note',
+          '[data-price]', '[data-product-price]', '.money',
+          '.product__price-and-badge', '.price__container',
+          '.price-item', '.price--on-sale', '.price-regular', '.price-sale',
+          '.price__regular', '.price__sale', '.price-wrapper', '.price-container',
+          '.unit-price', '.subtotal', '[data-subtotal]'
+        ];
+        function removePriceElements() {
+          document.querySelectorAll(priceSelectors.join(',')).forEach(function(el) {
+            // Don't remove elements inside our own RFQ modal
+            if (el.closest('.rfq-modal') || el.closest('.rfq-container')) return;
+            el.remove();
+          });
+          log('Price elements removed from DOM');
+        }
+        // Run immediately and again after a short delay (for late-rendering elements)
+        removePriceElements();
+        setTimeout(removePriceElements, 500);
+        setTimeout(removePriceElements, 1500);
+      }
 
       // Variant display management
       function updateVariantDisplay() {
