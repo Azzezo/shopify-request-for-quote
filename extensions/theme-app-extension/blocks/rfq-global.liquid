@@ -456,8 +456,8 @@
       </div>
       
       <div class="rfq-global-field">
-        <label class="rfq-global-label">Phone</label>
-        <input type="tel" name="customerPhone" class="rfq-global-input" placeholder="+353 1 234 5678" value="{{ customer.default_address.phone | escape }}">
+        <label class="rfq-global-label">Phone <span class="rfq-global-required">*</span></label>
+        <input type="tel" name="customerPhone" required class="rfq-global-input" placeholder="+353 1 234 5678" value="{{ customer.default_address.phone | escape }}">
       </div>
       
       <div class="rfq-global-field">
@@ -480,7 +480,7 @@
         </svg>
       </div>
       <h3>Quote Request Sent!</h3>
-      <p>We'll get back to you within 24 hours.</p>
+      <p>We'll get back to you as soon as possible.</p>
       <button type="button" class="rfq-global-success-close">Close</button>
     </div>
   </div>
@@ -680,6 +680,12 @@
       if (!emailRegex.test(emailInput.value.trim())) {
         alert('Please enter a valid email address');
         emailInput.focus();
+        return;
+      }
+      
+      if (!phoneInput.value.trim()) {
+        alert('Please enter your phone number');
+        phoneInput.focus();
         return;
       }
       

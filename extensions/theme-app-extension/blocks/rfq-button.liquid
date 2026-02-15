@@ -1006,6 +1006,12 @@
           }
         }
         
+        if (phoneInput && phoneInput.required && !phoneInput.value.trim()) {
+          alert('Please enter your phone number');
+          phoneInput.focus();
+          return false;
+        }
+        
         const submitBtn = formContainer.querySelector('.rfq-submit-btn');
         const submitText = submitBtn ? submitBtn.querySelector('.rfq-submit-text') : null;
         const submitLoading = submitBtn ? submitBtn.querySelector('.rfq-submit-loading') : null;
@@ -1196,7 +1202,7 @@
       "type": "checkbox",
       "id": "phone_required",
       "label": "Phone Required",
-      "default": false
+      "default": true
     },
     {
       "type": "checkbox",
