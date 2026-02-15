@@ -32,6 +32,13 @@
   {%- assign hide_price = product.metafields["$app"].rfq_hide_price.value -%}
 {%- endif -%}
 
+{%- assign has_real_variants = false -%}
+{%- if product.variants.size > 1 -%}
+  {%- assign has_real_variants = true -%}
+{%- elsif product.variants.first.title != 'Default Title' -%}
+  {%- assign has_real_variants = true -%}
+{%- endif -%}
+
 {% if rfq_enabled %}
   {%- comment -%}
     GLOBAL styles to hide buy-related elements across the ENTIRE page.
@@ -128,16 +135,22 @@
   </style>
 
   <div class="rfq-container" 
+       data-block-id="{{ block.id }}"
        data-product-id="{{ product.id }}" 
        data-product-title="{{ product.title | escape }}" 
        data-variant-id="{{ product.selected_or_first_available_variant.id }}" 
        data-variant-title="{{ product.selected_or_first_available_variant.title | escape }}" 
        data-shop="{{ shop.permanent_domain }}" 
-       data-hide-price="{{ hide_price }}">
+       data-hide-price="{{ hide_price }}"
+       data-has-variants="{{ has_real_variants }}">
+
+    <script type="application/json" class="rfq-variants-json">
+      [{%- for variant in product.variants -%}{"id":{{ variant.id | json }},"title":{{ variant.title | json }},"available":{{ variant.available | json }}}{%- unless forloop.last -%},{%- endunless -%}{%- endfor -%}]
+    </script>
 
     <div class="rfq-button-row">
       <button type="button" 
-              class="rfq-button rfq-open-btn" 
+              class="rfq-button rfq-open-btn{% if block.settings.button_style == 'secondary' %} button--secondary{% endif %}" 
               data-modal-id="rfq-modal-{{ block.id }}"
               style="--rfq-btn-bg: {{ block.settings.button_color | default: '#6fb31a' }}; --rfq-btn-text: {{ block.settings.button_text_color | default: '#ffffff' }};">
         {{ block.settings.button_text | default: "Request a Quote" }}
@@ -164,6 +177,12 @@
         </div>
         
         <div id="rfq-form-{{ block.id }}" class="rfq-form">
+          {% if has_real_variants %}
+          <div class="rfq-variant-info" id="rfq-variant-{{ block.id }}">
+            <span class="rfq-variant-label">Variant:</span>
+            <span class="rfq-variant-value">{{ product.selected_or_first_available_variant.title | escape }}</span>
+          </div>
+          {% endif %}
           <div class="rfq-field">
             <label class="rfq-label">Name <span class="rfq-required">*</span></label>
             <input type="text" name="customerName" required class="rfq-input" placeholder="Your name" value="{{ customer.name | escape }}">
@@ -246,6 +265,74 @@
     .rfq-container {
       margin: 1rem 0;
       width: 100%;
+    }
+
+    /* Sticky Nav RFQ Button (injected into theme's sticky nav) */
+    .rfq-sticky-nav-btn {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      min-height: 44px !important;
+      padding: 12px 24px !important;
+      font-size: 14px !important;
+      font-weight: 600 !important;
+      font-family: inherit !important;
+      cursor: pointer !important;
+      transition: all 0.2s ease !important;
+      background: var(--rfq-btn-bg, #6fb31a) !important;
+      color: var(--rfq-btn-text, #ffffff) !important;
+      border: none !important;
+      border-radius: 30px !important;
+      white-space: nowrap !important;
+      flex-shrink: 0 !important;
+      margin: 0 10px !important;
+      z-index: 10 !important;
+    }
+
+    .rfq-sticky-nav-btn:hover {
+      opacity: 0.9 !important;
+      transform: scale(1.02) !important;
+    }
+    
+    /* Clenli theme specific: position button properly in sticky bar */
+    sticky-add-to-cart .rfq-sticky-nav-btn,
+    .productView-stickyCart .rfq-sticky-nav-btn {
+      margin-right: auto !important;
+    }
+    
+    /* Hide quantity and other elements in sticky for RFQ products */
+    .sticky-actions .rfq-sticky-nav-btn ~ *,
+    .sticky-actions .quantity__group,
+    .sticky-actions .productView-quantity,
+    .sticky-actions quantity-input {
+      display: none !important;
+    }
+    
+    /* Make sure the RFQ button is visible */
+    .sticky-actions .rfq-sticky-nav-btn {
+      display: inline-flex !important;
+    }
+
+    /* Variant info display */
+    .rfq-variant-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      background: #f3f4f6;
+      border-radius: 8px;
+      font-size: 14px;
+      color: #374151;
+    }
+
+    .rfq-variant-label {
+      font-weight: 500;
+      color: #6b7280;
+    }
+
+    .rfq-variant-value {
+      font-weight: 600;
+      color: #1f2937;
     }
 
     /* Button row with response time */
@@ -624,17 +711,19 @@
 
   <script>
     (function() {
-      console.log('RFQ: Script initializing...');
+      const DEBUG = false; // Set to true for console logging
+      function log(...args) { if (DEBUG) console.log('[RFQ Block]', ...args); }
       
-      // Find the specific container for this block
-      const containers = document.querySelectorAll('.rfq-container');
-      const container = containers[containers.length - 1]; // Get the most recently added one
+      log('Script initializing...');
+      
+      // Find the specific container for this block instance
+      const container = document.querySelector('.rfq-container[data-block-id="{{ block.id }}"]');
       if (!container) {
-        console.error('RFQ: No container found!');
+        if (DEBUG) console.error('[RFQ Block] No container found!');
         return;
       }
       
-      console.log('RFQ: Container found', container);
+      log('Container found', container);
 
       const productId = container.dataset.productId;
       const productTitle = container.dataset.productTitle;
@@ -642,19 +731,26 @@
       const variantTitle = container.dataset.variantTitle;
       const shop = container.dataset.shop;
       const hidePrice = container.dataset.hidePrice === 'true';
+      const hasRealVariants = container.dataset.hasVariants === 'true';
       
-      console.log('RFQ: Product data:', { productId, productTitle, shop });
+      // Parse variant data
+      const variantsScript = container.querySelector('.rfq-variants-json');
+      const allVariants = variantsScript ? JSON.parse(variantsScript.textContent) : [];
+      let currentVariantId = variantId;
+      let currentVariantTitle = variantTitle;
+      
+      log('Product data:', { productId, productTitle, shop, hasRealVariants, variantCount: allVariants.length });
 
       // Find elements - search within modal for the form
       const blockId = '{{ block.id }}';
       const openBtn = container.querySelector('.rfq-open-btn');
       const modal = document.getElementById('rfq-modal-' + blockId);
       
-      console.log('RFQ: Looking for elements with blockId:', blockId);
-      console.log('RFQ: Modal found:', !!modal);
+      log('Looking for elements with blockId:', blockId);
+      log('Modal found:', !!modal);
       
       if (!modal) {
-        console.warn('RFQ: Modal not found');
+        log('Modal not found');
         return;
       }
       
@@ -665,59 +761,50 @@
       const overlay = modal.querySelector('.rfq-modal-overlay');
       const closeBtn = modal.querySelector('.rfq-close-btn');
       
-      console.log('RFQ: Form found:', !!form);
-      console.log('RFQ: Success div found:', !!successDiv);
+      log('Form found:', !!form);
       
       if (!form) {
-        console.error('RFQ: Form not found inside modal!');
-        console.log('RFQ: Looking for form with query: .rfq-form');
-        console.log('RFQ: All forms in document:', document.querySelectorAll('form').length);
-        console.log('RFQ: All forms with rfq-form class:', document.querySelectorAll('.rfq-form').length);
-        console.log('RFQ: Modal children:', modal.children);
-        
-        // Try finding inside modal-content
-        const modalContent = modal.querySelector('.rfq-modal-content');
-        if (modalContent) {
-          console.log('RFQ: Modal content children:', modalContent.children);
-          const formInContent = modalContent.querySelector('.rfq-form');
-          console.log('RFQ: Form inside modal-content:', formInContent);
+        log('Form not found inside modal!');
+      }
+
+      /* Note: hiding of add-to-cart, quantity, dynamic checkout, and price elements
+         is handled entirely by the CSS <style> block above.
+         No JS-based hiding is needed. */
+
+      // Variant display management
+      function updateVariantDisplay() {
+        const variantValue = modal.querySelector('.rfq-variant-value');
+        if (variantValue && hasRealVariants) {
+          variantValue.textContent = currentVariantTitle;
         }
       }
 
-      // Hide default UI elements (but NOT anything inside our modal)
-      function hideDefaultUi() {
-        try {
-          const hideSelectors = [
-            '.product-form__submit', '.btn-add-to-cart', '.btn-addtocart', '.addtocart',
-            'button[name="add"]', '[data-add-to-cart]', '.product-add-to-cart',
-            '.qty-field', '.quantity-selector',
-            '.shopify-payment-button', '.paypal-checkout-btn', '.dynamic-checkout__buttons',
-            '.additional-checkout-buttons', '.or-separator'
-          ];
-          document.querySelectorAll(hideSelectors.join(',')).forEach((el) => {
-            // Don't hide anything inside our RFQ modal
-            if (!el.closest('.rfq-modal') && !el.closest('.rfq-modal-content')) {
-              el.style.setProperty('display', 'none', 'important');
-            }
-          });
-          
-          if (hidePrice) {
-            const priceSelectors = ['.price', '.price-box', '.product-price', '.current-price', '[data-price]'];
-            document.querySelectorAll(priceSelectors.join(',')).forEach((el) => {
-              if (!el.closest('.rfq-container') && !el.closest('.rfq-modal')) {
-                el.style.setProperty('display', 'none', 'important');
-              }
-            });
-          }
-        } catch (e) {}
+      function onVariantChange(newVariantId) {
+        if (!newVariantId || String(newVariantId) === String(currentVariantId)) return;
+        const variant = allVariants.find(function(v) { return String(v.id) === String(newVariantId); });
+        if (variant) {
+          currentVariantId = String(variant.id);
+          currentVariantTitle = variant.title;
+          log('Variant changed to:', currentVariantTitle);
+          updateVariantDisplay();
+        }
       }
 
-      hideDefaultUi();
-      setTimeout(hideDefaultUi, 500);
-      setTimeout(hideDefaultUi, 1500);
+      function checkUrlForVariant() {
+        var params = new URLSearchParams(window.location.search);
+        var urlVariant = params.get('variant');
+        if (urlVariant) {
+          onVariantChange(urlVariant);
+        }
+      }
 
       // Open modal
       function openModal() {
+        // Refresh variant before opening (user may have changed it)
+        if (hasRealVariants) {
+          checkUrlForVariant();
+          updateVariantDisplay();
+        }
         modal.style.display = 'flex';
         document.body.style.overflow = 'hidden';
         if (form) form.style.display = 'flex';
@@ -729,7 +816,11 @@
       function closeModal() {
         modal.style.display = 'none';
         document.body.style.overflow = '';
-        if (form) form.reset();
+        /* form is a div (not a <form>), so manually clear inputs */
+        if (form) {
+          form.querySelectorAll('textarea').forEach(el => el.value = '');
+          form.querySelectorAll('input[name="quantity"]').forEach(el => el.value = '');
+        }
       }
 
       // Event listeners
@@ -747,9 +838,127 @@
         }
       });
 
+      // Inject RFQ button into theme's existing sticky nav (Clenli theme: sticky-add-to-cart)
+      function injectStickyNavButton() {
+        // Target the Clenli theme's sticky add to cart bar
+        const stickyNav = document.querySelector('sticky-add-to-cart, .productView-stickyCart, [data-sticky-add-to-cart]');
+        
+        if (!stickyNav) {
+          log('No sticky nav found');
+          return null;
+        }
+        
+        log('Found sticky nav:', stickyNav);
+        
+        // Check if button already exists
+        if (stickyNav.querySelector('.rfq-sticky-nav-btn')) {
+          return stickyNav.querySelector('.rfq-sticky-nav-btn');
+        }
+        
+        // Hide the price in the sticky bar if hidePrice is enabled
+        if (hidePrice) {
+          const stickyPrices = stickyNav.querySelectorAll('.sticky-price, .money-subtotal, [class*="price"]');
+          stickyPrices.forEach(el => {
+            el.style.setProperty('display', 'none', 'important');
+          });
+        }
+        
+        // Create the button
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'rfq-sticky-nav-btn button button--primary';
+        btn.textContent = '{{ block.settings.button_text | default: "Request a Quote" }}';
+        btn.style.setProperty('--rfq-btn-bg', '{{ block.settings.button_color | default: "#6fb31a" }}');
+        btn.style.setProperty('--rfq-btn-text', '{{ block.settings.button_text_color | default: "#ffffff" }}');
+        
+        // Find the sticky-actions container (where the add to cart button is)
+        const stickyActions = stickyNav.querySelector('.sticky-actions, .sticky-right, .sticky-content');
+        
+        if (stickyActions) {
+          // Insert at the beginning of sticky-actions for visibility
+          stickyActions.insertBefore(btn, stickyActions.firstChild);
+        } else {
+          // Fallback: add to the sticky-product-wrapper
+          const wrapper = stickyNav.querySelector('.sticky-product-wrapper, .container');
+          if (wrapper) {
+            wrapper.appendChild(btn);
+          } else {
+            stickyNav.appendChild(btn);
+          }
+        }
+        
+        log('Button injected into sticky nav');
+        return btn;
+      }
+      
+      // Wait for page to be fully loaded, then try to inject
+      let stickyBtnInjected = null;
+      
+      function tryInjectStickyBtn() {
+        if (!stickyBtnInjected) {
+          stickyBtnInjected = injectStickyNavButton();
+          if (stickyBtnInjected) {
+            stickyBtnInjected.addEventListener('click', function(e) {
+              e.preventDefault();
+              e.stopPropagation();
+              openModal();
+            });
+          }
+        }
+      }
+      
+      // Try multiple times as sticky nav might be dynamically created
+      setTimeout(tryInjectStickyBtn, 500);
+      setTimeout(tryInjectStickyBtn, 1500);
+      setTimeout(tryInjectStickyBtn, 3000);
+      
+      // Also try on scroll (sticky nav only appears after scrolling)
+      let scrollAttempts = 0;
+      window.addEventListener('scroll', function onScroll() {
+        if (scrollAttempts < 10 && !stickyBtnInjected) {
+          tryInjectStickyBtn();
+          scrollAttempts++;
+        }
+        if (stickyBtnInjected || scrollAttempts >= 10) {
+          window.removeEventListener('scroll', onScroll);
+        }
+      }, { passive: true });
+
+      // Variant change detection
+      if (hasRealVariants) {
+        // Method 1: Listen for change events on variant selectors in the product section
+        var productSection = container.closest('.shopify-section') || document;
+        productSection.addEventListener('change', function(e) {
+          var target = e.target;
+          if (target.matches('select, input[type="radio"], input[type="hidden"][name="id"]')) {
+            setTimeout(checkUrlForVariant, 150);
+          }
+        });
+
+        // Method 2: Listen for Shopify variant:change custom event
+        document.addEventListener('variant:change', function(e) {
+          if (e.detail && e.detail.variant) {
+            onVariantChange(String(e.detail.variant.id));
+          }
+        });
+
+        // Method 3: Watch for URL changes (themes using pushState/replaceState)
+        var lastHref = window.location.href;
+        var variantObserver = new MutationObserver(function() {
+          if (window.location.href !== lastHref) {
+            lastHref = window.location.href;
+            checkUrlForVariant();
+          }
+        });
+        variantObserver.observe(document.body, { subtree: true, childList: true, attributes: false });
+
+        // Initial check
+        checkUrlForVariant();
+      }
+
       // Form submission handler (using div instead of form to avoid nested form issues)
       async function handleFormSubmit(e) {
-        console.log('RFQ: handleFormSubmit called!');
+        log('handleFormSubmit called!');
         
         if (e) {
           e.preventDefault();
@@ -760,11 +969,11 @@
         const formContainer = form || modal.querySelector('.rfq-form');
         
         if (!formContainer) {
-          console.error('RFQ: Form container not found!');
+          log('Form container not found!');
           return false;
         }
         
-        console.log('RFQ: Form container found, starting submission...');
+        log('Form container found, starting submission...');
         
         // Get input values manually
         const nameInput = formContainer.querySelector('input[name="customerName"]');
@@ -787,6 +996,16 @@
           return false;
         }
         
+        // Validate email format
+        if (emailInput) {
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(emailInput.value.trim())) {
+            alert('Please enter a valid email address');
+            emailInput.focus();
+            return false;
+          }
+        }
+        
         const submitBtn = formContainer.querySelector('.rfq-submit-btn');
         const submitText = submitBtn ? submitBtn.querySelector('.rfq-submit-text') : null;
         const submitLoading = submitBtn ? submitBtn.querySelector('.rfq-submit-loading') : null;
@@ -802,8 +1021,8 @@
         formData.append('shop', shop);
         formData.append('productId', productId);
         formData.append('productTitle', productTitle);
-        formData.append('productVariantId', variantId);
-        formData.append('variantTitle', variantTitle);
+        formData.append('productVariantId', currentVariantId || variantId);
+        formData.append('variantTitle', currentVariantTitle || variantTitle);
         formData.append('customerName', nameInput ? nameInput.value : '');
         formData.append('customerEmail', emailInput ? emailInput.value : '');
         formData.append('customerPhone', phoneInput ? phoneInput.value : '');
@@ -813,12 +1032,15 @@
         let details = detailsInput ? detailsInput.value : '';
         if (!details) {
           details = 'Quote request for ' + productTitle;
+          if (hasRealVariants && currentVariantTitle && currentVariantTitle !== 'Default Title') {
+            details += ' - Variant: ' + currentVariantTitle;
+          }
           if (quantityInput && quantityInput.value) details += ' - Quantity: ' + quantityInput.value;
           if (companyInput && companyInput.value) details += ' - Company: ' + companyInput.value;
         }
         formData.append('requestDetails', details);
 
-        console.log('RFQ: Submitting to /apps/rfq');
+        log('Submitting to /apps/rfq');
 
         try {
           const response = await fetch('/apps/rfq', {
@@ -826,22 +1048,22 @@
             body: formData,
           });
 
-          console.log('RFQ: Response status:', response.status);
+          log('Response status:', response.status);
           
           const result = await response.json();
-          console.log('RFQ: Response data:', result);
+          log('Response data:', result);
 
           if (result.success) {
-            console.log('RFQ: Submission successful!');
+            log('Submission successful!');
             formContainer.style.display = 'none';
             if (successDiv) successDiv.style.display = 'block';
           } else {
-            console.error('RFQ: Server error:', result.error);
+            log('Server error:', result.error);
             if (errorMsg) errorMsg.textContent = result.error || 'Something went wrong. Please try again.';
             if (errorDiv) errorDiv.style.display = 'block';
           }
         } catch (error) {
-          console.error('RFQ: Network error:', error);
+          log('Network error:', error);
           if (errorMsg) errorMsg.textContent = 'Network error. Please try again.';
           if (errorDiv) errorDiv.style.display = 'block';
         } finally {
@@ -855,7 +1077,7 @@
 
       // Make submit function globally available for onclick
       window.submitRfqForm_{{ block.id | replace: '-', '' }} = function(e) {
-        console.log('RFQ: Submit button clicked!');
+        log('Submit button clicked!');
         if (e) {
           e.preventDefault();
           e.stopPropagation();
@@ -863,11 +1085,7 @@
         handleFormSubmit(e);
       };
       
-      console.log('RFQ: Global submit function registered');
-      
-      // Note: Submit button uses onclick attribute to call window.submitRfqForm_...
-      // We don't add additional event listeners to avoid duplicate submissions
-      console.log('RFQ: Form setup complete, using onclick attribute for submission');
+      log('Form setup complete');
     })();
   </script>
 {% else %}

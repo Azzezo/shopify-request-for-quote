@@ -2,7 +2,7 @@
 # This extension adds a simple toggle on the product page in Shopify admin
 # to enable/disable "Request for Quote" mode for individual products.
 
-api_version = "2025-01"
+api_version = "2026-01"
 
 [[extensions]]
 name = "Request for Quote"

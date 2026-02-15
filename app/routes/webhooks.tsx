@@ -14,11 +14,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   switch (topic) {
     case "APP_UNINSTALLED":
       if (session) {
-        // Clean up app data when the app is uninstalled
+        // Clean up session data when the app is uninstalled
+        // Note: Metaobject-based settings & submissions are shop-owned and persist after uninstall
         await prisma.session.deleteMany({ where: { shop } });
-        await prisma.appSettings.deleteMany({ where: { shop } });
-        // Optionally keep submissions for record keeping
-        // await prisma.quoteSubmission.deleteMany({ where: { shop } });
       }
       break;
     case "CUSTOMERS_DATA_REQUEST":

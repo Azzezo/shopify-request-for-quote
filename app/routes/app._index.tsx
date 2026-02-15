@@ -15,10 +15,11 @@ import {
   Box,
 } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
+import { RFQ_SUBMISSION_TYPE, RFQ_SETTINGS_TYPE } from "../services/metaobject-setup.server";
 
 const GET_SETTINGS_QUERY = `
-  query GetRfqSettings {
-    metaobjects(type: "$app:rfq_settings", first: 1) {
+  query GetRfqSettings($type: String!) {
+    metaobjects(type: $type, first: 1) {
       nodes {
         id
         fields {
@@ -46,7 +47,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const shop = session.shop;
 
   // Get app settings
-  const settingsResponse = await admin.graphql(GET_SETTINGS_QUERY);
+  const settingsResponse = await admin.graphql(GET_SETTINGS_QUERY, {
+    variables: { type: RFQ_SETTINGS_TYPE }
+  });
   const settingsData = await settingsResponse.json();
   const settings = settingsData?.data?.metaobjects?.nodes?.[0];
   const notificationEmail = settings?.fields?.find((f: any) => f.key === "notification_email")?.value;
@@ -81,9 +84,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 
   // Get submission counts (computed via pagination)
-  const submissionsCount = await countMetaobjects("$app:rfq_submission");
+  const submissionsCount = await countMetaobjects(RFQ_SUBMISSION_TYPE);
   const pendingCount = await countMetaobjects(
-    "$app:rfq_submission",
+    RFQ_SUBMISSION_TYPE,
     "fields.status:pending"
   );
 

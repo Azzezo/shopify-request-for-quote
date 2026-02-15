@@ -70,35 +70,20 @@ const GET_SETTINGS_QUERY = `
   }
 `;
 
-const GET_PRODUCTS_RFQ_STATUS = `
-  query GetProductsRfqStatus($handles: [String!]!) {
-    products(first: 50, query: "") {
+// Batch query: fetch multiple products by handles in a single GraphQL call.
+// Uses Shopify's `products` query with an OR-based handle filter.
+// Shopify supports up to 250 products per query.
+const GET_PRODUCTS_BY_HANDLES = `
+  query GetProductsByHandles($query: String!) {
+    products(first: 250, query: $query) {
       nodes {
-        id
         handle
-        rfqEnabled: metafield(namespace: "custom", key: "rfq_enabled") {
-          value
-        }
-        rfqHidePrice: metafield(namespace: "custom", key: "rfq_hide_price") {
-          value
-        }
-      }
-    }
-  }
-`;
-
-// Query for single product by handle
-// Check multiple namespaces where RFQ metafields might be stored
-const GET_PRODUCT_BY_HANDLE = `
-  query GetProductByHandle($handle: String!) {
-    productByHandle(handle: $handle) {
-      id
-      handle
-      metafields(first: 10) {
-        nodes {
-          namespace
-          key
-          value
+        metafields(first: 10) {
+          nodes {
+            namespace
+            key
+            value
+          }
         }
       }
     }
@@ -141,46 +126,51 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         return json({ products: {} }, { headers: corsHeaders });
       }
       
-      // Fetch each product's RFQ status
       const products: Record<string, { rfqEnabled: boolean; hidePrice: boolean }> = {};
       
-      // Process in batches to avoid too many concurrent requests
-      const batchSize = 10;
+      // Fetch all products in batches of 250 (Shopify's max per query).
+      // Each batch is a SINGLE GraphQL call using an OR-based handle filter,
+      // replacing the previous N+1 pattern (one call per product).
+      const batchSize = 250;
       for (let i = 0; i < handles.length; i += batchSize) {
         const batch = handles.slice(i, i + batchSize);
         
-        await Promise.all(batch.map(async (handle) => {
-          try {
-            const response = await admin.graphql(GET_PRODUCT_BY_HANDLE, {
-              variables: { handle }
-            });
-            const data = await response.json();
-            const product = data?.data?.productByHandle;
+        // Build a Shopify search query: handle:product-1 OR handle:product-2 ...
+        const queryFilter = batch.map((h) => `handle:${h}`).join(" OR ");
+        
+        try {
+          const response = await admin.graphql(GET_PRODUCTS_BY_HANDLES, {
+            variables: { query: queryFilter }
+          });
+          const data = await response.json();
+          const nodes = data?.data?.products?.nodes || [];
+          
+          for (const product of nodes) {
+            const metafields = product.metafields?.nodes || [];
+            let rfqEnabled = false;
+            let hidePrice = false;
             
-            if (product) {
-              // Check all metafields for rfq_enabled and rfq_hide_price
-              const metafields = product.metafields?.nodes || [];
-              let rfqEnabled = false;
-              let hidePrice = false;
-              
-              for (const mf of metafields) {
-                if (mf.key === "rfq_enabled" && mf.value === "true") {
-                  rfqEnabled = true;
-                  console.log(`RFQ: Found rfq_enabled=true in namespace "${mf.namespace}" for ${handle}`);
-                }
-                if (mf.key === "rfq_hide_price" && mf.value === "true") {
-                  hidePrice = true;
-                  console.log(`RFQ: Found rfq_hide_price=true in namespace "${mf.namespace}" for ${handle}`);
-                }
+            for (const mf of metafields) {
+              if (mf.key === "rfq_enabled" && mf.value === "true") {
+                rfqEnabled = true;
               }
-              
-              products[handle] = { rfqEnabled, hidePrice };
-              console.log(`RFQ: Product ${handle} - enabled: ${rfqEnabled}, hidePrice: ${hidePrice}, metafields found: ${metafields.length}`);
+              if (mf.key === "rfq_hide_price" && mf.value === "true") {
+                hidePrice = true;
+              }
             }
-          } catch (err) {
-            console.error(`Error fetching product ${handle}:`, err);
+            
+            products[product.handle] = { rfqEnabled, hidePrice };
           }
-        }));
+        } catch (err) {
+          console.error(`Error batch-fetching products:`, err);
+        }
+      }
+      
+      // Mark any handles not returned by Shopify as non-RFQ
+      for (const handle of handles) {
+        if (!products[handle]) {
+          products[handle] = { rfqEnabled: false, hidePrice: false };
+        }
       }
       
       return json({ products }, { headers: corsHeaders });
@@ -237,7 +227,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const customerPhone = formData.get("customerPhone") as string;
     const customerCompany = formData.get("customerCompany") as string;
     const quantity = formData.get("quantity") as string;
-    const requestDetails = formData.get("requestDetails") as string;
+    let requestDetails = (formData.get("requestDetails") as string) || "";
+    
+    // Append variant/company/quantity to request details so they're never lost
+    const extras: string[] = [];
+    if (variantTitle && variantTitle !== "Default Title") extras.push(`Variant: ${variantTitle}`);
+    if (quantity) extras.push(`Quantity: ${quantity}`);
+    if (customerCompany) extras.push(`Company: ${customerCompany}`);
+    if (extras.length > 0) {
+      requestDetails = requestDetails
+        ? `${requestDetails}\n\n${extras.join("\n")}`
+        : extras.join("\n");
+    }
+    if (!requestDetails) {
+      requestDetails = `Quote request for ${productTitle || "product"}`;
+    }
     
     console.log("RFQ Submission received:", { shop, customerName, customerEmail, productTitle });
 

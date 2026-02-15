@@ -3,12 +3,44 @@
   This app embed runs on ALL pages to:
   1. Hide prices and add-to-cart buttons for RFQ products on collection pages
   2. Hide prices from SEO structured data (JSON-LD)
-  3. Add "Request Quote" badges to RFQ products
+  3. Add working "Request Quote" buttons with modal to RFQ products
   
   IMPORTANT: This must be ENABLED in Theme Editor > App Embeds
 {% endcomment %}
 
 <style id="rfq-global-styles">
+  /* ===========================================
+     PENDING STATE - Hide while loading RFQ status
+     Prevents flash of price/cart before JS runs
+     =========================================== */
+  .rfq-pending .price,
+  .rfq-pending .price__container,
+  .rfq-pending .product-price,
+  .rfq-pending .product__price,
+  .rfq-pending [data-price],
+  .rfq-pending .money,
+  .rfq-pending .quick-add,
+  .rfq-pending .quick-add-button,
+  .rfq-pending quick-add-modal,
+  .rfq-pending quick-add-button,
+  .rfq-pending .quick-add__submit,
+  .rfq-pending .quick-add-modal,
+  .rfq-pending .quick-add-wrapper,
+  .rfq-pending .quick-shop,
+  .rfq-pending [data-quick-add],
+  .rfq-pending [data-quick-buy],
+  .rfq-pending .card__button,
+  .rfq-pending .add-to-cart,
+  .rfq-pending [data-add-to-cart],
+  .rfq-pending .product-form__submit,
+  .rfq-pending .btn-addtocart,
+  .rfq-pending form[action*="/cart/add"],
+  .rfq-pending product-form,
+  .rfq-pending .shopify-payment-button {
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+  
   /* ===========================================
      PRICE HIDING - Applied to .rfq-hide-price containers
      =========================================== */
@@ -72,6 +104,16 @@
   .rfq-hide-cart .grid-product__add-to-cart,
   .rfq-hide-cart .product-tile__add-to-cart,
   .rfq-hide-cart form[action*="/cart/add"] button,
+  .rfq-hide-cart form[action*="/cart/add"],
+  .rfq-hide-cart quick-add-modal,
+  .rfq-hide-cart quick-add-button,
+  .rfq-hide-cart .quick-add-modal,
+  .rfq-hide-cart .quick-add-wrapper,
+  .rfq-hide-cart .quick-shop,
+  .rfq-hide-cart .quick-shop-btn,
+  .rfq-hide-cart [data-quick-add],
+  .rfq-hide-cart [data-quick-buy],
+  .rfq-hide-cart product-form,
   /* Clenli theme specific */
   .rfq-hide-cart .shopify-payment-button,
   .rfq-hide-cart .dynamic-checkout,
@@ -81,33 +123,368 @@
   }
   
   /* ===========================================
-     RFQ BADGE - Shown instead of price
+     RFQ BUTTON - Clickable button on collection pages
+     Inherits the theme's native .button styling.
+     Only overrides what is needed for positioning/clickability.
      =========================================== */
-  .rfq-badge {
-    display: inline-flex;
+  .rfq-collection-btn {
+    margin-top: 0;
+    cursor: pointer !important;
+    font-family: inherit;
+    text-align: center !important;
+    width: 100%;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    /* Critical: ensure button is clickable above card overlays */
+    position: relative !important;
+    z-index: 100 !important;
+    pointer-events: auto !important;
+  }
+  
+  /* Position the button nicely in cards */
+  .rfq-hide-cart .rfq-collection-btn {
+    display: flex !important;
+    visibility: visible !important;
+  }
+  
+  /* Ensure parent containers don't block clicks */
+  [data-rfq-handle] .rfq-collection-btn {
+    position: relative !important;
+    z-index: 100 !important;
+  }
+
+  /* ===========================================
+     RFQ GLOBAL MODAL
+     =========================================== */
+  .rfq-global-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 999999;
+    display: none;
     align-items: center;
-    gap: 4px;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+
+  .rfq-global-modal.rfq-modal-open {
+    display: flex;
+  }
+
+  .rfq-global-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+  }
+
+  .rfq-global-content {
+    position: relative;
+    background: #ffffff;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 480px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    animation: rfqModalSlideIn 0.3s ease-out;
+  }
+
+  @keyframes rfqModalSlideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-20px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .rfq-global-header {
+    padding: 24px 24px 16px;
+    border-bottom: 1px solid #e5e7eb;
+    position: relative;
+  }
+
+  .rfq-global-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #111827;
+    margin: 0 0 4px 0;
+    padding-right: 40px;
+  }
+
+  .rfq-global-product {
+    font-size: 14px;
+    color: #6b7280;
+    margin: 0;
+  }
+
+  .rfq-global-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: #f3f4f6;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    color: #6b7280;
+  }
+
+  .rfq-global-close:hover {
+    background: #e5e7eb;
+    color: #111827;
+  }
+
+  .rfq-global-form {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .rfq-global-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .rfq-global-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #374151;
+  }
+
+  .rfq-global-required {
+    color: #ef4444;
+  }
+
+  .rfq-global-input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 15px;
+    transition: all 0.2s;
+    box-sizing: border-box;
+    font-family: inherit;
+  }
+
+  .rfq-global-input:focus {
+    outline: none;
+    border-color: #6fb31a;
+    box-shadow: 0 0 0 3px rgba(111, 179, 26, 0.15);
+  }
+
+  .rfq-global-input::placeholder {
+    color: #9ca3af;
+  }
+
+  textarea.rfq-global-input {
+    min-height: 100px;
+    resize: vertical;
+  }
+
+  .rfq-global-submit {
+    width: 100%;
+    padding: 14px 20px;
     background: #6fb31a;
     color: white;
-    font-size: 11px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
     font-weight: 600;
-    padding: 4px 10px;
-    border-radius: 20px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-top: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 8px;
   }
-  
-  .rfq-badge svg {
-    width: 12px;
-    height: 12px;
+
+  .rfq-global-submit:hover:not(:disabled) {
+    background: #5a9416;
   }
-  
-  /* Position the badge nicely in cards */
-  .rfq-hide-price .rfq-badge {
-    display: inline-flex !important;
+
+  .rfq-global-submit:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  .rfq-global-spinner {
+    display: none;
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: rfqSpin 0.8s linear infinite;
+  }
+
+  @keyframes rfqSpin {
+    to { transform: rotate(360deg); }
+  }
+
+  .rfq-global-submit.loading .rfq-global-spinner {
+    display: block;
+  }
+
+  .rfq-global-submit.loading .rfq-submit-text {
+    display: none;
+  }
+
+  .rfq-global-success,
+  .rfq-global-error {
+    display: none;
+    padding: 24px;
+    text-align: center;
+  }
+
+  .rfq-global-success.show,
+  .rfq-global-error.show {
+    display: block;
+  }
+
+  .rfq-global-success-icon {
+    width: 64px;
+    height: 64px;
+    background: #d1fae5;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+    color: #059669;
+  }
+
+  .rfq-global-success h3 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #111827;
+    margin: 0 0 8px 0;
+  }
+
+  .rfq-global-success p {
+    color: #6b7280;
+    margin: 0 0 20px 0;
+  }
+
+  .rfq-global-success-close {
+    padding: 12px 24px;
+    background: #6fb31a;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .rfq-global-success-close:hover {
+    background: #5a9416;
+  }
+
+  .rfq-global-error-msg {
+    color: #dc2626;
+    font-size: 14px;
+    padding: 12px;
+    background: #fef2f2;
+    border-radius: 8px;
+    margin-bottom: 16px;
+  }
+
+  /* Mobile responsive */
+  @media (max-width: 480px) {
+    .rfq-global-content {
+      max-height: 95vh;
+      margin: 10px;
+    }
+    
+    .rfq-global-header {
+      padding: 20px 20px 14px;
+    }
+    
+    .rfq-global-form {
+      padding: 20px;
+    }
+    
+    .rfq-global-title {
+      font-size: 18px;
+    }
   }
 </style>
+
+<!-- Shared RFQ Modal for Collection Pages -->
+<div id="rfq-global-modal" class="rfq-global-modal">
+  <div class="rfq-global-overlay"></div>
+  <div class="rfq-global-content">
+    <div class="rfq-global-header">
+      <h2 class="rfq-global-title">Request a Quote</h2>
+      <p class="rfq-global-product" id="rfq-global-product-name"></p>
+      <button type="button" class="rfq-global-close" aria-label="Close">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+    
+    <div class="rfq-global-form" id="rfq-global-form">
+      <div class="rfq-global-field">
+        <label class="rfq-global-label">Name <span class="rfq-global-required">*</span></label>
+        <input type="text" name="customerName" required class="rfq-global-input" placeholder="Your name" value="{{ customer.name | escape }}">
+      </div>
+      
+      <div class="rfq-global-field">
+        <label class="rfq-global-label">Email <span class="rfq-global-required">*</span></label>
+        <input type="email" name="customerEmail" required class="rfq-global-input" placeholder="your.email@example.com" value="{{ customer.email | escape }}">
+      </div>
+      
+      <div class="rfq-global-field">
+        <label class="rfq-global-label">Phone</label>
+        <input type="tel" name="customerPhone" class="rfq-global-input" placeholder="+353 1 234 5678" value="{{ customer.default_address.phone | escape }}">
+      </div>
+      
+      <div class="rfq-global-field">
+        <label class="rfq-global-label">Message</label>
+        <textarea name="requestDetails" class="rfq-global-input" placeholder="Any specific requirements or questions..."></textarea>
+      </div>
+      
+      <button type="button" class="rfq-global-submit" id="rfq-global-submit">
+        <span class="rfq-submit-text">Submit Quote Request</span>
+        <span class="rfq-global-spinner"></span>
+      </button>
+      
+      <div class="rfq-global-error-msg" id="rfq-global-error" style="display: none;"></div>
+    </div>
+    
+    <div class="rfq-global-success" id="rfq-global-success">
+      <div class="rfq-global-success-icon">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </div>
+      <h3>Quote Request Sent!</h3>
+      <p>We'll get back to you within 24 hours.</p>
+      <button type="button" class="rfq-global-success-close">Close</button>
+    </div>
+  </div>
+</div>
 
 <script>
 (function() {
@@ -120,19 +497,32 @@
     if (DEBUG) console.log('[RFQ Global]', ...args);
   }
   
-  // Cache to avoid repeated API calls
+  // State
   const rfqCache = new Map();
+  const buttonsAdded = new Set(); // Track handles that already have buttons
   let pendingHandles = new Set();
   let fetchTimeout = null;
+  let currentProduct = null;
+  let processTimeout = null; // Used by MutationObserver debounce
   
-  // Selectors for product cards/links - covers most themes
+  // Modal elements
+  const modal = document.getElementById('rfq-global-modal');
+  const overlay = modal?.querySelector('.rfq-global-overlay');
+  const closeBtn = modal?.querySelector('.rfq-global-close');
+  const form = document.getElementById('rfq-global-form');
+  const submitBtn = document.getElementById('rfq-global-submit');
+  const successDiv = document.getElementById('rfq-global-success');
+  const errorDiv = document.getElementById('rfq-global-error');
+  const productNameEl = document.getElementById('rfq-global-product-name');
+  const successCloseBtn = modal?.querySelector('.rfq-global-success-close');
+  
+  // Selectors
   const PRODUCT_LINK_SELECTORS = [
     'a[href*="/products/"]',
     '[data-product-handle]',
     '[data-handle]'
   ].join(',');
   
-  // Selectors for product containers that should receive the class
   const PRODUCT_CONTAINER_SELECTORS = [
     '.product-card',
     '.product-item', 
@@ -149,10 +539,8 @@
     '.product-tile',
     '.grid-product',
     '.collection-item',
-    // Shopify Dawn theme
     '.card-product',
     'product-card',
-    // Common wrappers
     '.product-block',
     '.product-item-container',
     '[data-product-card]'
@@ -169,7 +557,7 @@
     }
   }
   
-  // Find the product container for an element
+  // Find the product container
   function findProductContainer(element) {
     for (const selector of PRODUCT_CONTAINER_SELECTORS) {
       try {
@@ -179,11 +567,207 @@
         continue;
       }
     }
-    // Fallback: find nearest element with product link
     return element.closest('[data-product-handle]') || element.closest('[data-handle]') || element.parentElement?.parentElement;
   }
   
-  // Batch fetch RFQ status for multiple handles
+  // Get product title from container
+  function getProductTitle(container, handle) {
+    // Try various selectors for product title
+    const titleSelectors = [
+      '.card__heading a',
+      '.card__heading',
+      '.product-card__title',
+      '.product-item__title',
+      '.product__title',
+      '.product-title',
+      '[data-product-title]',
+      'h3 a',
+      'h2 a',
+      '.title a',
+      '.product-card-title',
+      '.grid-product__title'
+    ];
+    
+    for (const selector of titleSelectors) {
+      const el = container.querySelector(selector);
+      if (el && el.textContent.trim()) {
+        return el.textContent.trim();
+      }
+    }
+    
+    // Fallback: format handle
+    return handle.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+  
+  // Get product URL from container
+  function getProductUrl(container, handle) {
+    const link = container.querySelector('a[href*="/products/"]');
+    return link?.href || `/products/${handle}`;
+  }
+  
+  // Modal functions
+  function openModal(product) {
+    if (!modal) return;
+    
+    currentProduct = product;
+    productNameEl.textContent = product.title;
+    
+    // Reset form state
+    form.style.display = 'flex';
+    successDiv.classList.remove('show');
+    errorDiv.style.display = 'none';
+    submitBtn.classList.remove('loading');
+    submitBtn.disabled = false;
+    
+    modal.classList.add('rfq-modal-open');
+    document.body.style.overflow = 'hidden';
+    
+    // Focus first input
+    setTimeout(() => {
+      const firstInput = form.querySelector('input');
+      if (firstInput) firstInput.focus();
+    }, 100);
+  }
+  
+  function closeModal() {
+    if (!modal) return;
+    
+    modal.classList.remove('rfq-modal-open');
+    document.body.style.overflow = '';
+    currentProduct = null;
+    
+    /* Clear non-prefilled fields (keep name/email/phone for convenience) */
+    const textarea = form?.querySelector('textarea[name="requestDetails"]');
+    if (textarea) textarea.value = '';
+  }
+  
+  // Event listeners for modal
+  if (overlay) overlay.addEventListener('click', closeModal);
+  if (closeBtn) closeBtn.addEventListener('click', closeModal);
+  if (successCloseBtn) successCloseBtn.addEventListener('click', closeModal);
+  
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modal?.classList.contains('rfq-modal-open')) {
+      closeModal();
+    }
+  });
+  
+  // Form submission
+  if (submitBtn) {
+    submitBtn.addEventListener('click', async () => {
+      if (!currentProduct) return;
+      
+      const nameInput = form.querySelector('input[name="customerName"]');
+      const emailInput = form.querySelector('input[name="customerEmail"]');
+      const phoneInput = form.querySelector('input[name="customerPhone"]');
+      const detailsInput = form.querySelector('textarea[name="requestDetails"]');
+      
+      // Validation
+      if (!nameInput.value.trim()) {
+        alert('Please enter your name');
+        nameInput.focus();
+        return;
+      }
+      
+      if (!emailInput.value.trim()) {
+        alert('Please enter your email');
+        emailInput.focus();
+        return;
+      }
+      
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(emailInput.value.trim())) {
+        alert('Please enter a valid email address');
+        emailInput.focus();
+        return;
+      }
+      
+      // Show loading
+      submitBtn.classList.add('loading');
+      submitBtn.disabled = true;
+      errorDiv.style.display = 'none';
+      
+      // Build form data
+      const formData = new FormData();
+      formData.append('shop', SHOP);
+      formData.append('productId', currentProduct.id || '');
+      formData.append('productTitle', currentProduct.title);
+      formData.append('productVariantId', '');
+      formData.append('variantTitle', '');
+      formData.append('customerName', nameInput.value);
+      formData.append('customerEmail', emailInput.value);
+      formData.append('customerPhone', phoneInput.value || '');
+      formData.append('requestDetails', detailsInput.value || `Quote request for ${currentProduct.title}`);
+      
+      try {
+        const response = await fetch('/apps/rfq', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          form.style.display = 'none';
+          successDiv.classList.add('show');
+        } else {
+          errorDiv.textContent = result.error || 'Something went wrong. Please try again.';
+          errorDiv.style.display = 'block';
+        }
+      } catch (error) {
+        console.error('RFQ submission error:', error);
+        errorDiv.textContent = 'Network error. Please try again.';
+        errorDiv.style.display = 'block';
+      } finally {
+        submitBtn.classList.remove('loading');
+        submitBtn.disabled = false;
+      }
+    });
+  }
+  
+  // Create RFQ button for a product
+  // Uses theme button classes so the button matches the store's native styling
+  function createRfqButton(container, handle) {
+    const title = getProductTitle(container, handle);
+    const url = getProductUrl(container, handle);
+    
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    // Add theme-native button classes so the button inherits the store's styling
+    btn.className = 'rfq-collection-btn button button--primary btn btn--primary';
+    btn.setAttribute('data-rfq-btn', 'true');
+    btn.setAttribute('data-rfq-title', title);
+    btn.setAttribute('data-rfq-handle', handle);
+    btn.setAttribute('data-rfq-url', url);
+    btn.setAttribute('data-product-id', container.dataset.productId || '');
+    btn.textContent = 'Request Quote';
+    
+    return btn;
+  }
+  
+  // Global click handler using event delegation (more reliable)
+  document.addEventListener('click', function(e) {
+    const btn = e.target.closest('.rfq-collection-btn, [data-rfq-btn]');
+    if (btn) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      
+      console.log('[RFQ Global] Button clicked!', btn);
+      
+      openModal({
+        handle: btn.getAttribute('data-rfq-handle') || '',
+        title: btn.getAttribute('data-rfq-title') || 'Product',
+        url: btn.getAttribute('data-rfq-url') || '',
+        id: btn.getAttribute('data-product-id') || ''
+      });
+      
+      return false;
+    }
+  }, true); // Use capture phase to catch event first
+  
+  // Batch fetch RFQ status
   async function fetchRfqStatus(handles) {
     if (handles.length === 0) return;
     
@@ -192,44 +776,37 @@
     try {
       const response = await fetch(`/apps/rfq?action=check-products&shop=${SHOP}&handles=${handles.join(',')}`);
       if (!response.ok) {
-        console.warn('RFQ Global: Failed to fetch product status, status:', response.status);
+        console.warn('RFQ Global: Failed to fetch product status');
         return;
       }
       
       const data = await response.json();
       log('RFQ status response:', data);
       
-      // Update cache with results
       if (data.products) {
         for (const [handle, status] of Object.entries(data.products)) {
           rfqCache.set(handle, status);
         }
       }
       
-      // Mark handles with no data as not RFQ
       for (const handle of handles) {
         if (!rfqCache.has(handle)) {
           rfqCache.set(handle, { rfqEnabled: false, hidePrice: false });
         }
       }
       
-      // Apply styles
       applyStyles();
-      
-      // Also hide SEO data
       hideSeoData();
     } catch (error) {
       console.warn('RFQ Global: Error fetching product status:', error);
     }
   }
   
-  // Queue handles for batch fetching
   function queueHandleFetch(handle) {
     if (rfqCache.has(handle) || pendingHandles.has(handle)) return;
     
     pendingHandles.add(handle);
     
-    // Debounce the fetch
     clearTimeout(fetchTimeout);
     fetchTimeout = setTimeout(() => {
       const handles = Array.from(pendingHandles);
@@ -238,60 +815,110 @@
     }, 150);
   }
   
-  // Apply styles to all processed products
+  // Apply styles and buttons to products
   function applyStyles() {
+    // Check if we're on a product page (skip button insertion, let rfq-button.liquid handle it)
+    const isProductPage = /\/products\/[^\/]+/.test(window.location.pathname);
+    // Check if we're on the homepage (skip button insertion - only show on collection/search pages)
+    const path = window.location.pathname.replace(/\/+$/, '') || '/';
+    const isHomePage = path === '/' || path === '';
+    
     document.querySelectorAll('[data-rfq-handle]').forEach(element => {
       const handle = element.dataset.rfqHandle;
       const status = rfqCache.get(handle);
       
-      if (status?.rfqEnabled) {
-        element.classList.add('rfq-hide-cart');
-        if (status.hidePrice) {
-          element.classList.add('rfq-hide-price');
-          
-          // Add RFQ badge if not already present
-          if (!element.querySelector('.rfq-badge')) {
-            const priceContainer = element.querySelector('.price, .price__container, .product-price, [data-price]');
-            if (priceContainer && priceContainer.parentElement) {
-              const badge = document.createElement('span');
-              badge.className = 'rfq-badge';
-              badge.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Request Quote';
-              priceContainer.parentElement.insertBefore(badge, priceContainer);
-            }
-          }
-        }
-        log(`Applied RFQ styles to ${handle}:`, status);
+      // Remove pending state
+      element.classList.remove('rfq-pending');
+      
+      if (!status?.rfqEnabled) {
+        // Not RFQ-enabled, show everything back
+        element.classList.remove('rfq-hide-cart');
+        element.classList.remove('rfq-hide-price');
+        return;
       }
+      
+      // RFQ is enabled
+      element.classList.add('rfq-hide-cart');
+      
+      if (status.hidePrice) {
+        element.classList.add('rfq-hide-price');
+      } else {
+        element.classList.remove('rfq-hide-price');
+      }
+      
+      // Skip button insertion on product pages and homepage
+      if (isProductPage || isHomePage) {
+        return;
+      }
+      
+      // Skip if this handle already has a button anywhere on the page
+      if (buttonsAdded.has(handle)) {
+        return;
+      }
+      
+      // Skip if this specific element already has a button
+      if (element.querySelector('.rfq-collection-btn')) {
+        buttonsAdded.add(handle);
+        return;
+      }
+      
+      const btn = createRfqButton(element, handle);
+      
+      // Find a good place to insert the button (try only the FIRST match)
+      const insertTargets = [
+        '.card__content',
+        '.card__information',
+        '.product-card__info',
+        '.product-item__info',
+        '.card-information',
+        '.product-card-info',
+        '.product__info',
+        '.grid-product__content'
+      ];
+      
+      let inserted = false;
+      for (const selector of insertTargets) {
+        const target = element.querySelector(selector);
+        if (target) {
+          target.appendChild(btn);
+          inserted = true;
+          break;
+        }
+      }
+      
+      // Fallback: insert at end of container
+      if (!inserted) {
+        element.appendChild(btn);
+      }
+      
+      // Mark this handle as having a button globally
+      buttonsAdded.add(handle);
+      
+      log(`Applied RFQ to ${handle}`);
     });
   }
   
-  // Hide SEO structured data prices for RFQ products
+  // Hide SEO data
   function hideSeoData() {
-    // Find all JSON-LD scripts
     document.querySelectorAll('script[type="application/ld+json"]').forEach(script => {
       try {
         const data = JSON.parse(script.textContent);
         let modified = false;
         
-        // Check if this is product data
         if (data['@type'] === 'Product') {
           const handle = getProductHandle();
           if (handle && rfqCache.has(handle)) {
             const status = rfqCache.get(handle);
             if (status?.rfqEnabled && status?.hidePrice) {
-              // Remove price information from structured data
               delete data.offers;
               delete data.price;
               delete data.priceCurrency;
               modified = true;
-              log('Removed price from Product JSON-LD');
             }
           }
         }
         
-        // Handle ProductGroup or array of products
         if (data['@type'] === 'ProductGroup' || Array.isArray(data)) {
-          // Handle array of products
           const products = Array.isArray(data) ? data : [data];
           products.forEach(product => {
             if (product['@type'] === 'Product' && product.url) {
@@ -312,36 +939,31 @@
         if (modified) {
           script.textContent = JSON.stringify(data);
         }
-      } catch (e) {
-        // Invalid JSON, skip
-      }
+      } catch (e) {}
     });
     
-    // Also remove Open Graph price meta tags for current product
     const currentHandle = getProductHandle();
     if (currentHandle && rfqCache.has(currentHandle)) {
       const status = rfqCache.get(currentHandle);
       if (status?.rfqEnabled && status?.hidePrice) {
-        const priceMetaTags = document.querySelectorAll('meta[property="product:price:amount"], meta[property="product:price:currency"], meta[property="og:price:amount"], meta[property="og:price:currency"]');
-        priceMetaTags.forEach(tag => {
+        document.querySelectorAll('meta[property*="price"]').forEach(tag => {
           tag.setAttribute('content', '');
-          log('Cleared price meta tag:', tag.getAttribute('property'));
         });
       }
     }
   }
   
-  // Get current product handle from URL
   function getProductHandle() {
     return getHandleFromUrl(window.location.pathname);
   }
   
-  // Process a product link/element
+  // Process a product element
   function processElement(element) {
-    // Skip if element is inside an RFQ modal
-    if (element.closest('.rfq-modal')) return;
+    if (element.closest('.rfq-modal') || element.closest('.rfq-global-modal')) return;
     
-    // Get the handle
+    // Skip if this element is inside an already-processed container
+    if (element.closest('[data-rfq-handle]')) return;
+    
     let handle = element.dataset?.productHandle || element.dataset?.handle;
     
     if (!handle) {
@@ -351,47 +973,54 @@
     
     if (!handle) return;
     
-    // Find the container to apply styles to
     const container = findProductContainer(element);
-    if (!container || container.dataset.rfqHandle) return;
+    if (!container) return;
     
-    // Mark this container
+    // Skip if already processed
+    if (container.dataset.rfqHandle) return;
+    
+    // Skip if this container is inside another rfq-handle container (nested)
+    if (container.parentElement?.closest('[data-rfq-handle]')) return;
+    
     container.dataset.rfqHandle = handle;
     
-    // Check cache or queue for fetch
+    // Hide cart immediately to prevent flash of content (will show back if not RFQ-enabled)
+    // Only hide cart buttons preemptively; price hiding waits for API confirmation
+    container.classList.add('rfq-pending');
+    container.classList.add('rfq-hide-cart');
+    
     if (rfqCache.has(handle)) {
       const status = rfqCache.get(handle);
-      if (status?.rfqEnabled) {
-        container.classList.add('rfq-hide-cart');
-        if (status.hidePrice) {
-          container.classList.add('rfq-hide-price');
-        }
+      container.classList.remove('rfq-pending');
+      if (!status?.rfqEnabled) {
+        // Not RFQ-enabled, show back
+        container.classList.remove('rfq-hide-cart');
+      } else if (status.hidePrice) {
+        // RFQ enabled AND hide price
+        container.classList.add('rfq-hide-price');
       }
     } else {
       queueHandleFetch(handle);
     }
   }
   
-  // Process all product elements on the page
   function processPage() {
-    log('Processing page for RFQ products...');
+    log('Processing page...');
     document.querySelectorAll(PRODUCT_LINK_SELECTORS).forEach(processElement);
     
-    // Also check current product page
     const currentHandle = getProductHandle();
     if (currentHandle && !rfqCache.has(currentHandle)) {
       queueHandleFetch(currentHandle);
     }
   }
   
-  // Watch for dynamically added products (infinite scroll, quick view, etc)
   function setupObserver() {
     const observer = new MutationObserver((mutations) => {
       let shouldProcess = false;
       
       for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {
-          if (node.nodeType === 1) { // Element node
+          if (node.nodeType === 1) {
             shouldProcess = true;
             break;
           }
@@ -400,8 +1029,8 @@
       }
       
       if (shouldProcess) {
-        clearTimeout(window.rfqProcessTimeout);
-        window.rfqProcessTimeout = setTimeout(processPage, 200);
+        clearTimeout(processTimeout);
+        processTimeout = setTimeout(processPage, 200);
       }
     });
     
@@ -411,21 +1040,16 @@
     });
   }
   
-  // Initialize
   function init() {
     log('Initializing RFQ Global...');
     processPage();
     setupObserver();
     
-    // Re-process on Shopify section events
     document.addEventListener('shopify:section:load', processPage);
     document.addEventListener('shopify:section:select', processPage);
-    
-    // Re-process on SPA navigation events
     document.addEventListener('turbo:load', processPage);
     document.addEventListener('page:load', processPage);
     
-    // Re-process when URL changes (for SPA themes)
     let lastUrl = location.href;
     new MutationObserver(() => {
       if (location.href !== lastUrl) {
@@ -435,14 +1059,12 @@
     }).observe(document.body, { subtree: true, childList: true });
   }
   
-  // Run when DOM is ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
     init();
   }
   
-  // Also run after a short delay to catch lazy-loaded content
   setTimeout(processPage, 1000);
   setTimeout(processPage, 3000);
 })();
@@ -459,11 +1081,11 @@
     },
     {
       "type": "paragraph",
-      "content": "This app embed automatically hides prices and add-to-cart buttons for RFQ-enabled products on collection pages, search results, and product sliders."
+      "content": "This app embed automatically shows Request Quote buttons for RFQ-enabled products on collection pages, search results, and product sliders."
     },
     {
       "type": "paragraph",
-      "content": "It also removes price information from SEO structured data (JSON-LD) to prevent prices appearing in search results."
+      "content": "It hides prices and add-to-cart buttons, and removes price information from SEO structured data."
     }
   ]
 }
