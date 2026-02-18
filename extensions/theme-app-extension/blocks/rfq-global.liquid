@@ -10,38 +10,6 @@
 
 <style id="rfq-global-styles">
   /* ===========================================
-     PENDING STATE - Hide while loading RFQ status
-     Prevents flash of price/cart before JS runs
-     =========================================== */
-  .rfq-pending .price,
-  .rfq-pending .price__container,
-  .rfq-pending .product-price,
-  .rfq-pending .product__price,
-  .rfq-pending [data-price],
-  .rfq-pending .money,
-  .rfq-pending .quick-add,
-  .rfq-pending .quick-add-button,
-  .rfq-pending quick-add-modal,
-  .rfq-pending quick-add-button,
-  .rfq-pending .quick-add__submit,
-  .rfq-pending .quick-add-modal,
-  .rfq-pending .quick-add-wrapper,
-  .rfq-pending .quick-shop,
-  .rfq-pending [data-quick-add],
-  .rfq-pending [data-quick-buy],
-  .rfq-pending .card__button,
-  .rfq-pending .add-to-cart,
-  .rfq-pending [data-add-to-cart],
-  .rfq-pending .product-form__submit,
-  .rfq-pending .btn-addtocart,
-  .rfq-pending form[action*="/cart/add"],
-  .rfq-pending product-form,
-  .rfq-pending .shopify-payment-button {
-    opacity: 0 !important;
-    pointer-events: none !important;
-  }
-  
-  /* ===========================================
      PRICE HIDING - Applied to .rfq-hide-price containers
      =========================================== */
   .rfq-hide-price .price,
@@ -76,7 +44,12 @@
   /* Clenli theme specific */
   .rfq-hide-price .product__price-and-badge,
   .rfq-hide-price .tax-note,
-  .rfq-hide-price .unit-price {
+  .rfq-hide-price .unit-price,
+  .rfq-hide-price .custom-card-price,
+  .rfq-hide-price .custom-card-price-row .custom-card-price,
+  .rfq-hide-price .price-current,
+  .rfq-hide-price .price-vat,
+  .rfq-hide-price .price-item--vat {
     display: none !important;
     visibility: hidden !important;
   }
@@ -117,7 +90,15 @@
   /* Clenli theme specific */
   .rfq-hide-cart .shopify-payment-button,
   .rfq-hide-cart .dynamic-checkout,
-  .rfq-hide-cart .additional-checkout-buttons {
+  .rfq-hide-cart .additional-checkout-buttons,
+  .rfq-hide-cart .custom-card-button,
+  .rfq-hide-cart [data-btn-addtocart],
+  .rfq-hide-cart .add-to-cart-btn,
+  .rfq-hide-cart .variants-popup,
+  .rfq-hide-cart [data-quickshop-popup],
+  .rfq-hide-cart .quickshop-quantity,
+  .rfq-hide-cart .product-card__button2,
+  .rfq-hide-cart .variants form[action*="/cart/add"] {
     display: none !important;
     visibility: hidden !important;
   }
@@ -497,13 +478,38 @@
     if (DEBUG) console.log('[RFQ Global]', ...args);
   }
   
-  // State
+  // State — preload from sessionStorage so repeat visits have zero flash
+  const CACHE_KEY = 'rfq_product_cache';
+  const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
   const rfqCache = new Map();
-  const buttonsAdded = new Set(); // Track handles that already have buttons
+  const buttonsAdded = new Set();
   let pendingHandles = new Set();
   let fetchTimeout = null;
   let currentProduct = null;
-  let processTimeout = null; // Used by MutationObserver debounce
+  let processTimeout = null;
+
+  // Load cached RFQ statuses from sessionStorage
+  try {
+    const stored = sessionStorage.getItem(CACHE_KEY);
+    if (stored) {
+      const { data, ts } = JSON.parse(stored);
+      if (Date.now() - ts < CACHE_TTL) {
+        for (const [handle, status] of Object.entries(data)) {
+          rfqCache.set(handle, status);
+        }
+        log('Loaded', rfqCache.size, 'products from cache');
+      } else {
+        sessionStorage.removeItem(CACHE_KEY);
+      }
+    }
+  } catch (e) {}
+
+  function persistCache() {
+    try {
+      const data = Object.fromEntries(rfqCache);
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: Date.now() }));
+    } catch (e) {}
+  }
   
   // Modal elements
   const modal = document.getElementById('rfq-global-modal');
@@ -530,7 +536,10 @@
     '.product-card-info__price', '.product__price-and-badge',
     '.tax-note', '.unit-price', '.product-single__price',
     '.current-price', '.subtotal', '[data-subtotal]',
-    '.product-subtotal'
+    '.product-subtotal',
+    // Clenli theme specific
+    '.custom-card-price', '.price-current', '.price-vat',
+    '.price-item--vat'
   ];
 
   // Remove price elements from the DOM entirely within a container.
@@ -828,6 +837,7 @@
         }
       }
       
+      persistCache();
       applyStyles();
       hideSeoData();
     } catch (error) {
@@ -860,15 +870,7 @@
       const handle = element.dataset.rfqHandle;
       const status = rfqCache.get(handle);
       
-      // Remove pending state
-      element.classList.remove('rfq-pending');
-      
-      if (!status?.rfqEnabled) {
-        // Not RFQ-enabled, show everything back
-        element.classList.remove('rfq-hide-cart');
-        element.classList.remove('rfq-hide-price');
-        return;
-      }
+      if (!status?.rfqEnabled) return;
       
       // RFQ is enabled
       element.classList.add('rfq-hide-cart');
@@ -1019,22 +1021,18 @@
     
     container.dataset.rfqHandle = handle;
     
-    // Hide cart immediately to prevent flash of content (will show back if not RFQ-enabled)
-    // Only hide cart buttons preemptively; price hiding waits for API confirmation
-    container.classList.add('rfq-pending');
-    container.classList.add('rfq-hide-cart');
-    
     if (rfqCache.has(handle)) {
+      // Status known (from sessionStorage or prior fetch) — apply immediately, no flash
       const status = rfqCache.get(handle);
-      container.classList.remove('rfq-pending');
-      if (!status?.rfqEnabled) {
-        // Not RFQ-enabled, show back
-        container.classList.remove('rfq-hide-cart');
-      } else if (status.hidePrice) {
-        // RFQ enabled AND hide price
-        container.classList.add('rfq-hide-price');
+      if (status?.rfqEnabled) {
+        container.classList.add('rfq-hide-cart');
+        if (status.hidePrice) {
+          container.classList.add('rfq-hide-price');
+          removePriceElementsFrom(container);
+        }
       }
     } else {
+      // Status unknown — fetch it; do NOT preemptively hide (avoids flash on non-RFQ products)
       queueHandleFetch(handle);
     }
   }
@@ -1159,7 +1157,10 @@
     const cartSelectors = [
       '.product-form__submit', 'button[name="add"]', '[data-add-to-cart]',
       '.add-to-cart', '.btn-addtocart', 'form[action*="/cart/add"] button[type="submit"]',
-      '.shopify-payment-button', '.dynamic-checkout', '.additional-checkout-buttons'
+      '.shopify-payment-button', '.dynamic-checkout', '.additional-checkout-buttons',
+      '.custom-card-button', '[data-btn-addtocart]', '.add-to-cart-btn',
+      '.variants-popup', '[data-quickshop-popup]', '.quickshop-quantity',
+      '.product-card__button2'
     ];
     modal.querySelectorAll(cartSelectors.join(',')).forEach(el => el.remove());
 
