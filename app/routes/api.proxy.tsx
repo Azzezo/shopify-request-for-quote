@@ -246,7 +246,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     console.log("RFQ Submission received:", { shop, customerName, customerEmail, productTitle });
 
     // Validate required fields (requestDetails is optional)
-    if (!shop || !customerName || !customerEmail) {
+    if (!shop || !customerName || !customerEmail || !customerPhone) {
       return json(
         { error: "Missing required fields" },
         { status: 400, headers: corsHeaders }
